@@ -1,0 +1,120 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { api, formatDate, getResult } from '../api';
+import { Spinner, ErrorState, EmptyState, PageHeader } from '../components/ui';
+
+const RESULT = {
+  W: { badge: 'bg-emerald-500 text-white', border: 'border-l-emerald-400' },
+  L: { badge: 'bg-red-500 text-white',     border: 'border-l-red-400' },
+  D: { badge: 'bg-gray-400 text-white',    border: 'border-l-gray-300' },
+};
+
+function GameCard({ game, primaryTeamId }) {
+  const result = getResult(game, primaryTeamId);
+  const styles = result ? RESULT[result] : null;
+
+  const scorerMap = (game.goals ?? []).reduce((acc, g) => {
+    (acc[g.player_id] ??= { name: g.player_name, jersey: g.jersey_number, minutes: [] }).minutes.push(g.minute);
+    return acc;
+  }, {});
+
+  const scorerLines = Object.values(scorerMap);
+
+  return (
+    <Link
+      to={`/games/${game.id}`}
+      className={`block bg-white rounded-xl border border-l-4 ${styles?.border ?? 'border-l-gray-200'} border-gray-200 hover:shadow-md transition-all overflow-hidden`}
+    >
+      {/* Score row */}
+      <div className="flex items-center gap-3 p-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-3">
+            {result && (
+              <span className={`font-bebas text-xs px-2.5 py-0.5 rounded ${styles.badge}`}>{result}</span>
+            )}
+            <span className="text-xs text-gray-400">{formatDate(game.date)}</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <p className="font-bebas text-xl text-pitch-900 text-right flex-1 leading-tight">{game.home_team_name}</p>
+            <div className="bg-pitch-900 text-white px-4 py-1.5 rounded-lg font-bebas text-2xl flex items-center gap-2 shrink-0">
+              <span>{game.home_score}</span>
+              <span className="text-pitch-600">—</span>
+              <span>{game.away_score}</span>
+            </div>
+            <p className="font-bebas text-xl text-pitch-900 flex-1 leading-tight">{game.away_team_name}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Goals + POTG footer */}
+      {(scorerLines.length > 0 || game.player_of_game) && (
+        <div className="px-4 pb-3 pt-0 border-t border-gray-100 mt-0 space-y-1">
+          {scorerLines.length > 0 && (
+            <p className="text-xs text-gray-500 truncate">
+              ⚽ {scorerLines.map(s => `${s.name} ${s.minutes.map(m => `${m}'`).join(' ')}`).join('  ·  ')}
+            </p>
+          )}
+          {game.player_of_game && (
+            <p className="text-xs text-gold-600 font-medium">
+              ⭐ POTG: {game.player_of_game.player_name}
+            </p>
+          )}
+        </div>
+      )}
+    </Link>
+  );
+}
+
+export default function GamesList() {
+  const [games, setGames]   = useState(null);
+  const [teams, setTeams]   = useState([]);
+  const [error, setError]   = useState(null);
+
+  useEffect(() => {
+    Promise.all([api.getGames(), api.getTeams()])
+      .then(([g, t]) => { setGames(g); setTeams(t); })
+      .catch(e => setError(e.message));
+  }, []);
+
+  if (error) return <ErrorState message={error} />;
+  if (!games) return <Spinner />;
+
+  const primaryTeamId = teams[0]?.id;
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Season 2024"
+        title="All Games"
+        action={
+          <Link
+            to="/games/new"
+            className="bg-gold-500 hover:bg-gold-400 text-pitch-950 font-bold text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            + Add Game
+          </Link>
+        }
+      />
+
+      <div className="p-4 md:p-6">
+        {games.length === 0 ? (
+          <EmptyState
+            message="No games recorded yet. Add your first match!"
+            action={
+              <Link to="/games/new" className="inline-block mt-2 bg-gold-500 text-pitch-950 font-bold text-sm px-4 py-2 rounded-lg">
+                Add Game
+              </Link>
+            }
+          />
+        ) : (
+          <div className="space-y-3 max-w-2xl">
+            {games.map(g => (
+              <GameCard key={g.id} game={g} primaryTeamId={primaryTeamId} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

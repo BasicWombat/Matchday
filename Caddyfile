@@ -1,0 +1,3 @@
+soccer.burroweslab.net {
+    reverse_proxy localhost:3001
+}

@@ -85,28 +85,86 @@ function GoalRow({ goal, canDelete, onDelete }) {
   );
 }
 
-// Reusable score header: always home on left, away on right
-function ScoreHeader({ game, timerDisplay, timerColor = 'text-white' }) {
-  return (
-    <div className="flex items-center justify-center gap-4">
-      <p className="font-bebas text-white text-xl md:text-2xl text-right flex-1 leading-tight">
-        {game.home_team_name}
-      </p>
-      <div className="text-center shrink-0">
-        {timerDisplay && (
-          <p className={`font-bebas text-5xl tracking-widest ${timerColor}`}>{timerDisplay}</p>
-        )}
-        <div className="bg-pitch-800 rounded-2xl px-6 py-3">
-          <p className="font-bebas text-5xl text-white tracking-wider">
-            {game.home_score}
-            <span className="text-pitch-600 mx-2">—</span>
-            {game.away_score}
-          </p>
+// Inline score editor — manages its own open/closed state
+function ScoreEditor({ game, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [home, setHome] = useState('');
+  const [away, setAway] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  function open() {
+    setHome(String(game.home_score));
+    setAway(String(game.away_score));
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    await onSave(Number(home), Number(away));
+    setSaving(false);
+    setEditing(false);
+  }
+
+  async function reset() {
+    setSaving(true);
+    await onSave(null, null);
+    setSaving(false);
+    setEditing(false);
+  }
+
+  const isOverridden = game.score_home_override != null || game.score_away_override != null;
+
+  if (editing) {
+    return (
+      <div className="bg-pitch-800 rounded-2xl px-4 py-3 shrink-0 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <input
+            type="number" min="0" value={home}
+            onChange={e => setHome(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            className="w-14 text-center font-bebas text-4xl bg-transparent text-white border-b-2 border-pitch-500 focus:border-gold-400 outline-none"
+            autoFocus
+          />
+          <span className="font-bebas text-pitch-600 text-4xl">—</span>
+          <input
+            type="number" min="0" value={away}
+            onChange={e => setAway(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && save()}
+            className="w-14 text-center font-bebas text-4xl bg-transparent text-white border-b-2 border-pitch-500 focus:border-gold-400 outline-none"
+          />
+        </div>
+        <div className="flex justify-center gap-3 mt-2.5">
+          <button onClick={save} disabled={saving} className="text-gold-400 text-xs font-bold disabled:opacity-50">
+            ✓ Save
+          </button>
+          {isOverridden && (
+            <button onClick={reset} disabled={saving} className="text-pitch-400 hover:text-pitch-200 text-xs disabled:opacity-50">
+              Reset
+            </button>
+          )}
+          <button onClick={() => setEditing(false)} className="text-pitch-500 hover:text-pitch-300 text-xs">
+            Cancel
+          </button>
         </div>
       </div>
-      <p className="font-bebas text-white text-xl md:text-2xl flex-1 leading-tight">
-        {game.away_team_name}
-      </p>
+    );
+  }
+
+  return (
+    <div className="shrink-0 flex flex-col items-center gap-1">
+      <div className="bg-pitch-800 rounded-2xl px-6 py-3">
+        <p className="font-bebas text-5xl text-white tracking-wider">
+          {game.home_score}
+          <span className="text-pitch-600 mx-2">—</span>
+          {game.away_score}
+        </p>
+      </div>
+      <button
+        onClick={open}
+        className="text-[10px] text-pitch-500 hover:text-pitch-300 transition-colors leading-none"
+      >
+        {isOverridden ? '✎ edited' : '✎ edit score'}
+      </button>
     </div>
   );
 }
@@ -187,6 +245,16 @@ export default function GameDetail() {
     await gameAction(() => api.fulltimeGame(id), 'Full time!');
   };
   const handleReopen   = () => gameAction(() => api.reopenGame(id),   'Game reopened');
+
+  async function saveScore(homeScore, awayScore) {
+    try {
+      const g = await api.setScore(id, { home_score: homeScore, away_score: awayScore });
+      setGame(g);
+      toast(homeScore == null ? 'Score reset to goals' : 'Score updated');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
 
   // Open player picker for My Team's panel; log anonymous goal for opponent panel
   function handleGoalButtonClick(side) {
@@ -424,13 +492,7 @@ export default function GameDetail() {
               <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.home_team_name}</p>
               <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
             </div>
-            <div className="bg-pitch-800 rounded-2xl px-6 py-3 shrink-0">
-              <p className="font-bebas text-5xl text-white tracking-wider">
-                {game.home_score}
-                <span className="text-pitch-600 mx-2">—</span>
-                {game.away_score}
-              </p>
-            </div>
+            <ScoreEditor game={game} onSave={saveScore} />
             <div className="flex-1">
               <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.away_team_name}</p>
               <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>
@@ -523,11 +585,7 @@ export default function GameDetail() {
               <p className="font-bebas text-white text-xl leading-tight">{game.home_team_name}</p>
               <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
             </div>
-            <div className="bg-pitch-800 rounded-2xl px-6 py-3 shrink-0">
-              <p className="font-bebas text-5xl text-white tracking-wider">
-                {game.home_score}<span className="text-pitch-600 mx-2">—</span>{game.away_score}
-              </p>
-            </div>
+            <ScoreEditor game={game} onSave={saveScore} />
             <div className="flex-1">
               <p className="font-bebas text-white text-xl leading-tight">{game.away_team_name}</p>
               <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>
@@ -606,11 +664,7 @@ export default function GameDetail() {
             <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.home_team_name}</p>
             <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
           </div>
-          <div className="bg-pitch-800 rounded-2xl px-6 py-3 shrink-0">
-            <p className="font-bebas text-5xl text-white tracking-wider">
-              {game.home_score}<span className="text-pitch-600 mx-2">—</span>{game.away_score}
-            </p>
-          </div>
+          <ScoreEditor game={game} onSave={saveScore} />
           <div className="flex-1">
             <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.away_team_name}</p>
             <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>

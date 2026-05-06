@@ -13,8 +13,9 @@ const GAME_SELECT = `
     g.notes, g.created_by, g.updated_by,
     g.status, g.started_at, g.first_half_duration_seconds,
     g.second_half_started_at, g.completed_at,
-    (SELECT COUNT(*) FROM goals WHERE game_id = g.id AND team_id = g.home_team) AS home_score,
-    (SELECT COUNT(*) FROM goals WHERE game_id = g.id AND team_id = g.away_team) AS away_score,
+    g.score_home_override, g.score_away_override,
+    COALESCE(g.score_home_override, (SELECT COUNT(*) FROM goals WHERE game_id = g.id AND team_id = g.home_team)) AS home_score,
+    COALESCE(g.score_away_override, (SELECT COUNT(*) FROM goals WHERE game_id = g.id AND team_id = g.away_team)) AS away_score,
     cu.display_name AS created_by_name,
     uu.display_name AS updated_by_name,
     (
@@ -173,6 +174,26 @@ router.delete('/:id', requireAuth, wrap((req, res) => {
   if (!game) return res.status(404).json({ error: 'Game not found' });
   db.prepare('DELETE FROM games WHERE id = ?').run(req.params.id);
   res.json({ deleted: true, id: Number(req.params.id) });
+}));
+
+// PATCH /api/games/:id/score  — manual score override (null clears override)
+router.patch('/:id/score', requireAuth, wrap((req, res) => {
+  const game = db.prepare('SELECT id FROM games WHERE id = ?').get(req.params.id);
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const { home_score, away_score } = req.body ?? {};
+  const homeOverride = home_score != null ? Number(home_score) : null;
+  const awayOverride = away_score != null ? Number(away_score) : null;
+
+  if (homeOverride !== null && (!Number.isInteger(homeOverride) || homeOverride < 0))
+    return res.status(400).json({ error: 'home_score must be a non-negative integer' });
+  if (awayOverride !== null && (!Number.isInteger(awayOverride) || awayOverride < 0))
+    return res.status(400).json({ error: 'away_score must be a non-negative integer' });
+
+  db.prepare('UPDATE games SET score_home_override=?, score_away_override=?, updated_by=? WHERE id=?')
+    .run(homeOverride, awayOverride, req.user.id, req.params.id);
+
+  res.json(parseGame(stmtFindById.get(req.params.id)));
 }));
 
 // ── Game state transitions ────────────────────────────────────────────────────

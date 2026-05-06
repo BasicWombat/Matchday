@@ -164,6 +164,13 @@ if (!liveGoalCols.includes('elapsed_seconds')) {
   db.pragma('foreign_keys = ON');
 }
 
+// Migration: add manual score override columns to games
+const scoreOverrideCols = db.pragma('table_info(games)').map(c => c.name);
+if (!scoreOverrideCols.includes('score_home_override')) {
+  db.exec('ALTER TABLE games ADD COLUMN score_home_override INTEGER');
+  db.exec('ALTER TABLE games ADD COLUMN score_away_override INTEGER');
+}
+
 function seedAdmin() {
   const existing = db.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (existing.count > 0) return;

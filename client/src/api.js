@@ -48,6 +48,9 @@ export const api = {
   updateGame:   (id, d)  => req(`/api/games/${id}`, { method: 'PUT', body: JSON.stringify(d) }),
   deleteGame:   (id)     => req(`/api/games/${id}`, { method: 'DELETE' }),
 
+  // Manual score override — pass null values to clear
+  setScore:     (id, d)  => req(`/api/games/${id}/score`, { method: 'PATCH', body: JSON.stringify(d) }),
+
   // Game state transitions
   startGame:    (id)     => req(`/api/games/${id}/start`,    { method: 'PATCH' }),
   halftimeGame: (id)     => req(`/api/games/${id}/halftime`, { method: 'PATCH' }),

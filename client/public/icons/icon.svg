@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Dark green rounded square background -->
+  <rect width="512" height="512" rx="110" ry="110" fill="#1a3a2a"/>
+  <!-- Soccer ball centered -->
+  <!-- Main ball circle -->
+  <circle cx="256" cy="268" r="148" fill="white" opacity="0.97"/>
+  <!-- Black pentagon patches (simplified soccer ball pattern) -->
+  <!-- Center pentagon -->
+  <polygon points="256,188 295,214 280,258 232,258 217,214" fill="#111" opacity="0.88"/>
+  <!-- Top-right patch -->
+  <polygon points="312,174 348,198 338,238 302,244 290,206" fill="#111" opacity="0.88"/>
+  <!-- Right patch -->
+  <polygon points="358,238 388,268 372,308 334,308 324,272" fill="#111" opacity="0.88"/>
+  <!-- Bottom-right patch -->
+  <polygon points="316,328 336,368 298,394 268,374 272,334" fill="#111" opacity="0.88"/>
+  <!-- Bottom-left patch -->
+  <polygon points="240,334 244,374 214,394 176,368 196,328" fill="#111" opacity="0.88"/>
+  <!-- Left patch -->
+  <polygon points="154,238 188,272 178,308 140,308 124,268" fill="#111" opacity="0.88"/>
+  <!-- Top-left patch -->
+  <polygon points="200,206 188,244 152,238 162,198 200,174" fill="#111" opacity="0.88"/>
+  <!-- Gold accent strip at top -->
+  <rect x="0" y="0" width="512" height="18" rx="18" ry="18" fill="#d4a017" opacity="0.85"/>
+  <!-- "M" wordmark at top of icon -->
+  <text x="256" y="108" font-family="Arial Black, sans-serif" font-weight="900" font-size="88" fill="white" text-anchor="middle" letter-spacing="-2">M</text>
+</svg>

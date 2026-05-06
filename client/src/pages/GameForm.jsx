@@ -81,7 +81,8 @@ export default function GameForm() {
     setError(null);
     setSaving(true);
 
-    const myTeamId   = user?.my_team_id;
+    const myTeam     = teams.find(t => t.id === user?.my_team_id) ?? teams[0];
+    const myTeamId   = myTeam?.id;
     const opponentId = Number(form.opponent);
 
     const payload = {

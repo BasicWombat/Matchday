@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const wrap = require('../lib/wrap');
+const { requireAuth } = require('../lib/auth');
 
 // GET /api/players?team_id=X
 router.get('/', wrap((req, res) => {
@@ -12,7 +13,7 @@ router.get('/', wrap((req, res) => {
 }));
 
 // POST /api/players
-router.post('/', wrap((req, res) => {
+router.post('/', requireAuth, wrap((req, res) => {
   const { name, team_id, jersey_number } = req.body ?? {};
   if (!name?.trim() || !team_id || jersey_number == null)
     return res.status(400).json({ error: 'name, team_id, and jersey_number are required' });
@@ -32,7 +33,7 @@ router.post('/', wrap((req, res) => {
 }));
 
 // DELETE /api/players/:id
-router.delete('/:id', wrap((req, res) => {
+router.delete('/:id', requireAuth, wrap((req, res) => {
   const player = db.prepare('SELECT id FROM players WHERE id = ?').get(req.params.id);
   if (!player) return res.status(404).json({ error: 'Player not found' });
 

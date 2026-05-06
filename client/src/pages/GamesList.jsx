@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDate, getResult } from '../api';
 import { Spinner, ErrorState, EmptyState, PageHeader } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 
 const RESULT = {
   W: { badge: 'bg-emerald-500 text-white', border: 'border-l-emerald-400' },
@@ -9,26 +10,53 @@ const RESULT = {
   D: { badge: 'bg-gray-400 text-white',    border: 'border-l-gray-300' },
 };
 
-function GameCard({ game, primaryTeamId }) {
-  const result = getResult(game, primaryTeamId);
-  const styles = result ? RESULT[result] : null;
+const STATUS_BADGE = {
+  scheduled: { label: 'Scheduled', className: 'bg-gray-200 text-gray-600' },
+  live:      { label: 'Live',      className: 'bg-emerald-500 text-white' },
+  halftime:  { label: 'Half Time', className: 'bg-amber-400 text-pitch-950' },
+};
 
-  const scorerMap = (game.goals ?? []).reduce((acc, g) => {
-    (acc[g.player_id] ??= { name: g.player_name, jersey: g.jersey_number, minutes: [] }).minutes.push(g.minute);
-    return acc;
-  }, {});
+function LiveDot() {
+  return (
+    <span className="relative flex h-2 w-2 shrink-0">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+    </span>
+  );
+}
+
+function GameCard({ game, primaryTeamId }) {
+  const result  = getResult(game, primaryTeamId);
+  const styles  = result ? RESULT[result] : null;
+  const isLive  = game.status === 'live' || game.status === 'halftime';
+  const statusBadge = STATUS_BADGE[game.status];
+
+  const scorerMap = (game.goals ?? [])
+    .filter(g => g.player_name)
+    .reduce((acc, g) => {
+      (acc[g.player_id] ??= { name: g.player_name, minutes: [] }).minutes.push(g.minute);
+      return acc;
+    }, {});
 
   const scorerLines = Object.values(scorerMap);
 
   return (
     <Link
       to={`/games/${game.id}`}
-      className={`block bg-white rounded-xl border border-l-4 ${styles?.border ?? 'border-l-gray-200'} border-gray-200 hover:shadow-md transition-all overflow-hidden`}
+      className={`block bg-white rounded-xl border border-l-4 ${
+        isLive ? 'border-l-emerald-400' : (styles?.border ?? 'border-l-gray-200')
+      } border-gray-200 hover:shadow-md transition-all overflow-hidden`}
     >
       {/* Score row */}
       <div className="flex items-center gap-3 p-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-3">
+            {isLive && <LiveDot />}
+            {statusBadge && (
+              <span className={`font-bebas text-xs px-2.5 py-0.5 rounded ${statusBadge.className}`}>
+                {statusBadge.label}
+              </span>
+            )}
             {result && (
               <span className={`font-bebas text-xs px-2.5 py-0.5 rounded ${styles.badge}`}>{result}</span>
             )}
@@ -37,7 +65,7 @@ function GameCard({ game, primaryTeamId }) {
 
           <div className="flex items-center gap-3">
             <p className="font-bebas text-xl text-pitch-900 text-right flex-1 leading-tight">{game.home_team_name}</p>
-            <div className="bg-pitch-900 text-white px-4 py-1.5 rounded-lg font-bebas text-2xl flex items-center gap-2 shrink-0">
+            <div className={`${isLive ? 'bg-emerald-800' : 'bg-pitch-900'} text-white px-4 py-1.5 rounded-lg font-bebas text-2xl flex items-center gap-2 shrink-0`}>
               <span>{game.home_score}</span>
               <span className="text-pitch-600">—</span>
               <span>{game.away_score}</span>
@@ -48,8 +76,8 @@ function GameCard({ game, primaryTeamId }) {
       </div>
 
       {/* Goals + POTG footer */}
-      {(scorerLines.length > 0 || game.player_of_game) && (
-        <div className="px-4 pb-3 pt-0 border-t border-gray-100 mt-0 space-y-1">
+      {(scorerLines.length > 0 || game.player_of_game || game.created_by_name) && (
+        <div className="px-4 pb-3 pt-0 border-t border-gray-100 space-y-1">
           {scorerLines.length > 0 && (
             <p className="text-xs text-gray-500 truncate">
               ⚽ {scorerLines.map(s => `${s.name} ${s.minutes.map(m => `${m}'`).join(' ')}`).join('  ·  ')}
@@ -60,6 +88,9 @@ function GameCard({ game, primaryTeamId }) {
               ⭐ POTG: {game.player_of_game.player_name}
             </p>
           )}
+          {game.created_by_name && (
+            <p className="text-[10px] text-gray-400">Added by {game.created_by_name}</p>
+          )}
         </div>
       )}
     </Link>
@@ -67,9 +98,10 @@ function GameCard({ game, primaryTeamId }) {
 }
 
 export default function GamesList() {
-  const [games, setGames]   = useState(null);
-  const [teams, setTeams]   = useState([]);
-  const [error, setError]   = useState(null);
+  const { user } = useAuth();
+  const [games, setGames] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     Promise.all([api.getGames(), api.getTeams()])
@@ -80,7 +112,7 @@ export default function GamesList() {
   if (error) return <ErrorState message={error} />;
   if (!games) return <Spinner />;
 
-  const primaryTeamId = teams[0]?.id;
+  const primaryTeamId = (teams.find(t => t.id === user?.my_team_id) ?? teams[0])?.id;
 
   return (
     <div>

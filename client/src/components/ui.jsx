@@ -58,13 +58,14 @@ export function LeaderRow({ rank, name, jersey, teamName, value, unit, gold }) {
 }
 
 export function Btn({ variant = 'primary', size = 'md', className = '', ...props }) {
-  const base = 'inline-flex items-center justify-center gap-1.5 font-bold rounded-lg transition-colors focus:outline-none';
+  const base = 'inline-flex items-center justify-center gap-1.5 font-bold rounded-lg transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed';
   const sizes = { sm: 'text-xs px-3 py-1.5', md: 'text-sm px-4 py-2', lg: 'px-6 py-2.5' };
   const variants = {
-    primary:  'bg-gold-500 hover:bg-gold-400 text-pitch-950',
-    danger:   'bg-red-600 hover:bg-red-500 text-white',
-    ghost:    'bg-white border border-gray-200 hover:bg-gray-50 text-pitch-800',
-    dark:     'bg-pitch-800 hover:bg-pitch-700 text-white',
+    primary:   'bg-gold-500 hover:bg-gold-400 text-pitch-950',
+    secondary: 'bg-white border border-gray-200 hover:bg-pitch-50 hover:border-pitch-300 text-pitch-700',
+    danger:    'bg-red-600 hover:bg-red-500 text-white',
+    ghost:     'bg-white border border-gray-200 hover:bg-gray-50 text-pitch-800',
+    dark:      'bg-pitch-800 hover:bg-pitch-700 text-white',
   };
   return (
     <button className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...props} />

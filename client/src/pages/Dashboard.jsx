@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDate, getResult } from '../api';
 import { Spinner, ErrorState, EmptyState, LeaderRow } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 
 const RESULT_STYLES = {
   W: { badge: 'bg-emerald-500 text-white', border: 'border-l-emerald-500' },
@@ -69,11 +70,15 @@ function MiniGameCard({ game, primaryTeamId }) {
           ⭐ {game.player_of_game.player_name}
         </p>
       )}
+      {game.created_by_name && (
+        <p className="text-[10px] text-gray-400 mt-1 text-center">Added by {game.created_by_name}</p>
+      )}
     </Link>
   );
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
@@ -87,7 +92,7 @@ export default function Dashboard() {
   if (!data)  return <Spinner />;
 
   const { games, teams, scorers, potg } = data;
-  const primaryTeam   = teams[0];
+  const primaryTeam   = teams.find(t => t.id === user?.my_team_id) ?? teams[0];
   const primaryTeamId = primaryTeam?.id;
 
   const ourGames = games.filter(g =>
@@ -107,6 +112,8 @@ export default function Dashboard() {
   const recentGames = games.slice(0, 3);
   const topScorers  = scorers.filter(p => p.goals > 0).slice(0, 3);
   const topPotg     = potg.filter(p => p.awards > 0).slice(0, 3);
+
+  const liveGame = games.find(g => g.status === 'live' || g.status === 'halftime');
 
   return (
     <div>
@@ -130,6 +137,36 @@ export default function Dashboard() {
       </div>
 
       <div className="p-4 md:p-6 space-y-8">
+        {/* ── Live Now card ───────────────────────────────── */}
+        {liveGame && (
+          <section>
+            <Link
+              to={`/games/${liveGame.id}`}
+              className="block bg-emerald-800 border border-emerald-600 rounded-xl p-4 hover:bg-emerald-700 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+                </span>
+                <span className="text-emerald-300 text-xs font-bold uppercase tracking-widest">
+                  {liveGame.status === 'halftime' ? 'Half Time' : 'Live Now'}
+                </span>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <p className="font-bebas text-white text-xl text-right flex-1 leading-tight">{liveGame.home_team_name}</p>
+                <div className="bg-emerald-900 text-white px-4 py-1.5 rounded-lg font-bebas text-2xl flex items-center gap-2 shrink-0">
+                  <span>{liveGame.home_score}</span>
+                  <span className="text-emerald-600">—</span>
+                  <span>{liveGame.away_score}</span>
+                </div>
+                <p className="font-bebas text-white text-xl flex-1 leading-tight">{liveGame.away_team_name}</p>
+              </div>
+              <p className="text-emerald-500 text-xs text-center mt-2">Tap to open →</p>
+            </Link>
+          </section>
+        )}
+
         {/* ── Season stats ────────────────────────────────── */}
         <section>
           <h2 className="font-bebas text-pitch-900 text-2xl tracking-wide mb-3">Season Summary</h2>

@@ -1,9 +1,10 @@
 const router = require('express').Router();
 const db = require('../db');
 const wrap = require('../lib/wrap');
+const { requireAuth } = require('../lib/auth');
 
 // POST /api/player-of-game  (upsert — one per game)
-router.post('/', wrap((req, res) => {
+router.post('/', requireAuth, wrap((req, res) => {
   const { game_id, player_id } = req.body ?? {};
   if (!game_id || !player_id)
     return res.status(400).json({ error: 'game_id and player_id are required' });
@@ -16,8 +17,8 @@ router.post('/', wrap((req, res) => {
   const upsert = db.transaction(() => {
     db.prepare('DELETE FROM player_of_game WHERE game_id = ?').run(game_id);
     const { lastInsertRowid } = db
-      .prepare('INSERT INTO player_of_game (game_id, player_id) VALUES (?, ?)')
-      .run(game_id, player_id);
+      .prepare('INSERT INTO player_of_game (game_id, player_id, created_by) VALUES (?, ?, ?)')
+      .run(game_id, player_id, req.user.id);
     return lastInsertRowid;
   });
 

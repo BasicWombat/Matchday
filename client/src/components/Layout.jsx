@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Link, Outlet } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const NAV = [
   {
@@ -34,6 +35,14 @@ const NAV = [
         <rect x="3"  y="12" width="4" height="9" rx="1" />
         <rect x="10" y="7"  width="4" height="14" rx="1" />
         <rect x="17" y="3"  width="4" height="18" rx="1" />
+      </svg>
+    ),
+  },
+  {
+    to: '/settings', label: 'Settings',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
       </svg>
     ),
   },
@@ -76,6 +85,8 @@ function NavItem({ to, end, label, icon, mobile }) {
 }
 
 export default function Layout() {
+  const { user, logout } = useAuth();
+
   return (
     <div className="min-h-screen">
       {/* ── Desktop sidebar ─────────────────────────────── */}
@@ -97,8 +108,21 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="px-5 py-4 border-t border-white/5">
-          <p className="text-pitch-600 text-[10px] text-center uppercase tracking-widest">Matchday v1.0</p>
+        {/* User area */}
+        <div className="px-4 py-4 border-t border-white/10">
+          <p className="text-white text-sm font-semibold truncate">{user?.display_name}</p>
+          <p className="text-pitch-500 text-xs truncate">{user?.username}</p>
+          <div className="flex gap-2 mt-2">
+            <Link to="/account" className="flex-1 text-center text-[11px] font-medium text-pitch-400 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg transition-colors">
+              My Account
+            </Link>
+            <button
+              onClick={logout}
+              className="flex-1 text-[11px] font-medium text-pitch-400 hover:text-red-400 bg-white/5 hover:bg-red-900/20 px-2 py-1.5 rounded-lg transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </aside>
 

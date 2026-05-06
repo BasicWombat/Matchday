@@ -31,6 +31,10 @@ function MiniGameCard({ game, primaryTeamId }) {
   const result = getResult(game, primaryTeamId);
   const styles = result ? RESULT_STYLES[result] : null;
 
+  const myTeamIsHome = game.home_team === primaryTeamId;
+  const myTeamIsAway = game.away_team === primaryTeamId;
+  const haLabel = myTeamIsHome ? 'Home' : myTeamIsAway ? 'Away' : null;
+
   const scorerMap = (game.goals ?? []).reduce((acc, g) => {
     (acc[g.player_id] ??= { name: g.player_name, minutes: [] }).minutes.push(g.minute);
     return acc;
@@ -46,16 +50,24 @@ function MiniGameCard({ game, primaryTeamId }) {
           {result && (
             <span className={`font-bebas text-xs px-2 py-0.5 rounded ${styles.badge}`}>{result}</span>
           )}
+          {haLabel && (
+            <span className={`font-bebas text-xs px-2 py-0.5 rounded ${
+              haLabel === 'Home' ? 'bg-pitch-100 text-pitch-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              {haLabel}
+            </span>
+          )}
           <span className="text-xs text-gray-400">{formatDate(game.date)}</span>
         </div>
       </div>
 
+      {/* Score — always home left, away right */}
       <div className="flex items-center justify-center gap-3">
         <p className="font-bebas text-lg text-pitch-900 text-right flex-1 leading-tight">{game.home_team_name}</p>
         <div className="bg-pitch-900 text-white px-3 py-1 rounded-lg font-bebas text-xl flex items-center gap-1.5 shrink-0">
-          <span>{game.home_score}</span>
+          <span className={myTeamIsHome ? 'text-gold-400' : ''}>{game.home_score}</span>
           <span className="text-pitch-600 text-base">—</span>
-          <span>{game.away_score}</span>
+          <span className={myTeamIsAway ? 'text-gold-400' : ''}>{game.away_score}</span>
         </div>
         <p className="font-bebas text-lg text-pitch-900 flex-1 leading-tight">{game.away_team_name}</p>
       </div>
@@ -104,16 +116,34 @@ export default function Dashboard() {
     return { ours: isHome ? g.home_score : g.away_score, theirs: isHome ? g.away_score : g.home_score };
   };
 
-  const wins   = ourGames.filter(g => { const s = getScores(g); return s.ours > s.theirs; }).length;
-  const losses = ourGames.filter(g => { const s = getScores(g); return s.ours < s.theirs; }).length;
-  const draws  = ourGames.length - wins - losses;
+  const wins       = ourGames.filter(g => { const s = getScores(g); return s.ours > s.theirs; }).length;
+  const losses     = ourGames.filter(g => { const s = getScores(g); return s.ours < s.theirs; }).length;
+  const draws      = ourGames.length - wins - losses;
   const totalGoals = ourGames.reduce((sum, g) => sum + getScores(g).ours, 0);
+
+  // Home / Away breakdown — completed games only
+  const completedGames = ourGames.filter(g => g.status === 'complete');
+  const homeGames = completedGames.filter(g => g.home_team === primaryTeamId);
+  const awayGames = completedGames.filter(g => g.away_team === primaryTeamId);
+
+  const homeRecord = {
+    w: homeGames.filter(g => g.home_score > g.away_score).length,
+    d: homeGames.filter(g => g.home_score === g.away_score).length,
+    l: homeGames.filter(g => g.home_score < g.away_score).length,
+  };
+  const awayRecord = {
+    w: awayGames.filter(g => g.away_score > g.home_score).length,
+    d: awayGames.filter(g => g.away_score === g.home_score).length,
+    l: awayGames.filter(g => g.away_score < g.home_score).length,
+  };
 
   const recentGames = games.slice(0, 3);
   const topScorers  = scorers.filter(p => p.goals > 0).slice(0, 3);
   const topPotg     = potg.filter(p => p.awards > 0).slice(0, 3);
 
   const liveGame = games.find(g => g.status === 'live' || g.status === 'halftime');
+  const liveMyTeamIsHome = liveGame?.home_team === primaryTeamId;
+  const liveMyTeamIsAway = liveGame?.away_team === primaryTeamId;
 
   return (
     <div>
@@ -152,13 +182,19 @@ export default function Dashboard() {
                 <span className="text-emerald-300 text-xs font-bold uppercase tracking-widest">
                   {liveGame.status === 'halftime' ? 'Half Time' : 'Live Now'}
                 </span>
+                {(liveMyTeamIsHome || liveMyTeamIsAway) && (
+                  <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest">
+                    · {liveMyTeamIsHome ? 'Home' : 'Away'}
+                  </span>
+                )}
               </div>
+              {/* Score — always home left, away right */}
               <div className="flex items-center justify-center gap-3">
                 <p className="font-bebas text-white text-xl text-right flex-1 leading-tight">{liveGame.home_team_name}</p>
                 <div className="bg-emerald-900 text-white px-4 py-1.5 rounded-lg font-bebas text-2xl flex items-center gap-2 shrink-0">
-                  <span>{liveGame.home_score}</span>
+                  <span className={liveMyTeamIsHome ? 'text-gold-400' : ''}>{liveGame.home_score}</span>
                   <span className="text-emerald-600">—</span>
-                  <span>{liveGame.away_score}</span>
+                  <span className={liveMyTeamIsAway ? 'text-gold-400' : ''}>{liveGame.away_score}</span>
                 </div>
                 <p className="font-bebas text-white text-xl flex-1 leading-tight">{liveGame.away_team_name}</p>
               </div>
@@ -170,12 +206,30 @@ export default function Dashboard() {
         {/* ── Season stats ────────────────────────────────── */}
         <section>
           <h2 className="font-bebas text-pitch-900 text-2xl tracking-wide mb-3">Season Summary</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
             <StatCard label="Games Played" value={ourGames.length} dark />
             <StatCard label="Wins"          value={wins}           accent="text-emerald-600" />
             <StatCard label="Goals Scored"  value={totalGoals}     dark />
             <StatCard label="D / L"         value={`${draws} / ${losses}`} />
           </div>
+          {/* Home / Away breakdown */}
+          {completedGames.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap gap-x-6 gap-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bebas text-[10px] uppercase tracking-widest text-pitch-500">Home</span>
+                <span className="font-bebas text-sm text-emerald-600">W{homeRecord.w}</span>
+                <span className="font-bebas text-sm text-gray-400">D{homeRecord.d}</span>
+                <span className="font-bebas text-sm text-red-500">L{homeRecord.l}</span>
+              </div>
+              <span className="text-gray-300 self-center">|</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bebas text-[10px] uppercase tracking-widest text-pitch-500">Away</span>
+                <span className="font-bebas text-sm text-emerald-600">W{awayRecord.w}</span>
+                <span className="font-bebas text-sm text-gray-400">D{awayRecord.d}</span>
+                <span className="font-bebas text-sm text-red-500">L{awayRecord.l}</span>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Recent results ──────────────────────────────── */}

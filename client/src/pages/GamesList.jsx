@@ -31,6 +31,10 @@ function GameCard({ game, primaryTeamId }) {
   const isLive  = game.status === 'live' || game.status === 'halftime';
   const statusBadge = STATUS_BADGE[game.status];
 
+  const myTeamIsHome = game.home_team === primaryTeamId;
+  const myTeamIsAway = game.away_team === primaryTeamId;
+  const haLabel = myTeamIsHome ? 'H' : myTeamIsAway ? 'A' : null;
+
   const scorerMap = (game.goals ?? [])
     .filter(g => g.player_name)
     .reduce((acc, g) => {
@@ -47,9 +51,9 @@ function GameCard({ game, primaryTeamId }) {
         isLive ? 'border-l-emerald-400' : (styles?.border ?? 'border-l-gray-200')
       } border-gray-200 hover:shadow-md transition-all overflow-hidden`}
     >
-      {/* Score row */}
       <div className="flex items-center gap-3 p-4">
         <div className="flex-1">
+          {/* Badges row */}
           <div className="flex items-center gap-2 mb-3">
             {isLive && <LiveDot />}
             {statusBadge && (
@@ -60,17 +64,31 @@ function GameCard({ game, primaryTeamId }) {
             {result && (
               <span className={`font-bebas text-xs px-2.5 py-0.5 rounded ${styles.badge}`}>{result}</span>
             )}
+            {haLabel && (
+              <span className={`font-bebas text-xs px-2 py-0.5 rounded ${
+                haLabel === 'H'
+                  ? 'bg-pitch-100 text-pitch-700'
+                  : 'bg-blue-100 text-blue-700'
+              }`}>
+                {haLabel === 'H' ? 'Home' : 'Away'}
+              </span>
+            )}
             <span className="text-xs text-gray-400">{formatDate(game.date)}</span>
           </div>
 
+          {/* Score row — always home left, away right */}
           <div className="flex items-center gap-3">
-            <p className="font-bebas text-xl text-pitch-900 text-right flex-1 leading-tight">{game.home_team_name}</p>
+            <p className="font-bebas text-xl text-pitch-900 text-right flex-1 leading-tight">
+              {game.home_team_name}
+            </p>
             <div className={`${isLive ? 'bg-emerald-800' : 'bg-pitch-900'} text-white px-4 py-1.5 rounded-lg font-bebas text-2xl flex items-center gap-2 shrink-0`}>
-              <span>{game.home_score}</span>
+              <span className={myTeamIsHome ? 'text-gold-400' : ''}>{game.home_score}</span>
               <span className="text-pitch-600">—</span>
-              <span>{game.away_score}</span>
+              <span className={myTeamIsAway ? 'text-gold-400' : ''}>{game.away_score}</span>
             </div>
-            <p className="font-bebas text-xl text-pitch-900 flex-1 leading-tight">{game.away_team_name}</p>
+            <p className="font-bebas text-xl text-pitch-900 flex-1 leading-tight">
+              {game.away_team_name}
+            </p>
           </div>
         </div>
       </div>

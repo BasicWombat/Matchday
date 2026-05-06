@@ -4,7 +4,7 @@ import { api } from '../api';
 import { Spinner, ErrorState, PageHeader, Btn } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
-const EMPTY = { date: '', home_team: '', away_team: '', notes: '' };
+const EMPTY = { date: '', opponent: '', homeAway: 'home', notes: '' };
 
 export default function GameForm() {
   const { user }   = useAuth();
@@ -18,10 +18,9 @@ export default function GameForm() {
   const [error,   setError]   = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Inline "add new opponent" state
-  const [addingOpponent,    setAddingOpponent]    = useState(false);
-  const [newOpponentName,   setNewOpponentName]   = useState('');
-  const [savingOpponent,    setSavingOpponent]    = useState(false);
+  const [addingOpponent,  setAddingOpponent]  = useState(false);
+  const [newOpponentName, setNewOpponentName] = useState('');
+  const [savingOpponent,  setSavingOpponent]  = useState(false);
   const newOpponentRef = useRef(null);
 
   useEffect(() => {
@@ -32,23 +31,19 @@ export default function GameForm() {
       .then(([allTeams, game]) => {
         setTeams(allTeams);
         if (game) {
+          const myTeamIsHome = game.home_team === user?.my_team_id;
           setForm({
-            date:      game.date,
-            home_team: String(game.home_team),
-            away_team: String(game.away_team),
-            notes:     game.notes ?? '',
+            date:     game.date,
+            opponent: String(myTeamIsHome ? game.away_team : game.home_team),
+            homeAway: myTeamIsHome ? 'home' : 'away',
+            notes:    game.notes ?? '',
           });
-        } else {
-          // Default home team to "my team"
-          const myTeam = allTeams.find(t => t.id === user?.my_team_id) ?? allTeams[0];
-          if (myTeam) setForm(f => ({ ...f, home_team: String(myTeam.id) }));
         }
         setLoading(false);
       })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [id, isEdit]);
 
-  // Focus the new opponent input when it appears
   useEffect(() => {
     if (addingOpponent) newOpponentRef.current?.focus();
   }, [addingOpponent]);
@@ -57,11 +52,11 @@ export default function GameForm() {
     setForm(f => ({ ...f, [field]: value }));
   }
 
-  function handleAwayChange(e) {
+  function handleOpponentChange(e) {
     if (e.target.value === '__new__') {
       setAddingOpponent(true);
     } else {
-      set('away_team', e.target.value);
+      set('opponent', e.target.value);
     }
   }
 
@@ -71,7 +66,7 @@ export default function GameForm() {
     try {
       const team = await api.createTeam({ name: newOpponentName.trim() });
       setTeams(prev => [...prev, team]);
-      set('away_team', String(team.id));
+      set('opponent', String(team.id));
       setNewOpponentName('');
       setAddingOpponent(false);
     } catch (e) {
@@ -86,10 +81,13 @@ export default function GameForm() {
     setError(null);
     setSaving(true);
 
+    const myTeamId   = user?.my_team_id;
+    const opponentId = Number(form.opponent);
+
     const payload = {
       date:      form.date,
-      home_team: Number(form.home_team),
-      away_team: Number(form.away_team),
+      home_team: form.homeAway === 'home' ? myTeamId : opponentId,
+      away_team: form.homeAway === 'home' ? opponentId : myTeamId,
       notes:     form.notes.trim() || null,
     };
 
@@ -107,9 +105,12 @@ export default function GameForm() {
   if (error && loading) return <ErrorState message={error} />;
   if (loading)          return <Spinner />;
 
-  const myTeam     = teams.find(t => t.id === user?.my_team_id);
-  // Away team options: all teams except my team (they're opponents)
-  const awayTeams  = teams.filter(t => t.id !== user?.my_team_id || (isEdit && String(t.id) === form.away_team));
+  const myTeam        = teams.find(t => t.id === user?.my_team_id);
+  const opponentTeams = teams.filter(t => t.id !== user?.my_team_id);
+  const selectedOpponent = opponentTeams.find(t => String(t.id) === form.opponent);
+
+  const homeTeamName = form.homeAway === 'home' ? (myTeam?.name ?? 'My Team') : (selectedOpponent?.name ?? '—');
+  const awayTeamName = form.homeAway === 'home' ? (selectedOpponent?.name ?? '—') : (myTeam?.name ?? 'My Team');
 
   return (
     <div>
@@ -128,6 +129,7 @@ export default function GameForm() {
 
       <div className="p-4 md:p-6 max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-5">
+
           {/* ── Date ──────────────────────────────────────── */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
@@ -142,79 +144,99 @@ export default function GameForm() {
             />
           </div>
 
-          {/* ── Teams ─────────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Home team — locked to My Team */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
-                Home Team
-              </label>
-              {isEdit ? (
-                <select
-                  required
-                  value={form.home_team}
-                  onChange={e => set('home_team', e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
-                >
-                  <option value="">Select…</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              ) : (
-                <div className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-pitch-700 flex items-center gap-1.5">
-                  <span className="text-gold-500">⭐</span>
-                  {myTeam?.name ?? 'My Team'}
-                </div>
-              )}
+          {/* ── Home or Away toggle ───────────────────────── */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
+              Home or Away?
+            </label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => set('homeAway', 'home')}
+                className={`flex-1 py-2.5 text-sm font-bold transition-colors ${
+                  form.homeAway === 'home'
+                    ? 'bg-pitch-800 text-white'
+                    : 'bg-white text-pitch-700 hover:bg-gray-50'
+                }`}
+              >
+                Home
+              </button>
+              <button
+                type="button"
+                onClick={() => set('homeAway', 'away')}
+                className={`flex-1 py-2.5 text-sm font-bold transition-colors border-l border-gray-200 ${
+                  form.homeAway === 'away'
+                    ? 'bg-pitch-800 text-white'
+                    : 'bg-white text-pitch-700 hover:bg-gray-50'
+                }`}
+              >
+                Away
+              </button>
             </div>
+          </div>
 
-            {/* Away team — opponents only + add new inline */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
-                Away Team
-              </label>
-              {addingOpponent ? (
-                <div className="flex gap-1.5">
-                  <input
-                    ref={newOpponentRef}
-                    type="text"
-                    placeholder="Team name…"
-                    value={newOpponentName}
-                    onChange={e => setNewOpponentName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') { e.preventDefault(); handleAddOpponent(); }
-                      if (e.key === 'Escape') { setAddingOpponent(false); setNewOpponentName(''); }
-                    }}
-                    className="flex-1 min-w-0 border border-pitch-400 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddOpponent}
-                    disabled={savingOpponent || !newOpponentName.trim()}
-                    className="shrink-0 bg-pitch-800 hover:bg-pitch-700 disabled:opacity-50 text-white text-xs font-bold px-2 py-1.5 rounded-lg transition-colors"
-                  >
-                    {savingOpponent ? '…' : 'Add'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAddingOpponent(false); setNewOpponentName(''); }}
-                    className="shrink-0 text-gray-400 hover:text-gray-600 text-xs px-1"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <select
-                  required
-                  value={form.away_team}
-                  onChange={handleAwayChange}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
-                >
-                  <option value="">Select…</option>
-                  {awayTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  <option value="__new__">+ Add new opponent…</option>
-                </select>
-              )}
+          {/* ── Matchup preview ───────────────────────────── */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex-1 text-right">
+                <p className="font-bebas text-pitch-900 text-lg leading-tight">{homeTeamName}</p>
+                <p className="text-[10px] uppercase tracking-widest text-pitch-400">Home</p>
+              </div>
+              <span className="text-pitch-400 text-sm shrink-0">vs</span>
+              <div className="flex-1">
+                <p className="font-bebas text-pitch-900 text-lg leading-tight">{awayTeamName}</p>
+                <p className="text-[10px] uppercase tracking-widest text-pitch-400">Away</p>
+              </div>
             </div>
+          </div>
+
+          {/* ── Opponent ──────────────────────────────────── */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
+              Opponent
+            </label>
+            {addingOpponent ? (
+              <div className="flex gap-1.5">
+                <input
+                  ref={newOpponentRef}
+                  type="text"
+                  placeholder="Team name…"
+                  value={newOpponentName}
+                  onChange={e => setNewOpponentName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddOpponent(); }
+                    if (e.key === 'Escape') { setAddingOpponent(false); setNewOpponentName(''); }
+                  }}
+                  className="flex-1 min-w-0 border border-pitch-400 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddOpponent}
+                  disabled={savingOpponent || !newOpponentName.trim()}
+                  className="shrink-0 bg-pitch-800 hover:bg-pitch-700 disabled:opacity-50 text-white text-xs font-bold px-2 py-1.5 rounded-lg transition-colors"
+                >
+                  {savingOpponent ? '…' : 'Add'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAddingOpponent(false); setNewOpponentName(''); }}
+                  className="shrink-0 text-gray-400 hover:text-gray-600 text-xs px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <select
+                required
+                value={form.opponent}
+                onChange={handleOpponentChange}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+              >
+                <option value="">Select opponent…</option>
+                {opponentTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <option value="__new__">+ Add new opponent…</option>
+              </select>
+            )}
           </div>
 
           {/* ── Notes ─────────────────────────────────────── */}

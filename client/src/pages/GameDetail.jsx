@@ -70,7 +70,7 @@ function GoalRow({ goal, canDelete, onDelete }) {
       <div className="flex-1 min-w-0">
         {goal.player_name
           ? <p className="font-medium text-pitch-900 text-sm truncate">{goal.player_name}</p>
-          : <p className="text-sm text-gray-400 italic">Opponent</p>
+          : <p className="text-sm text-gray-400 italic">Unknown scorer</p>
         }
       </div>
       {canDelete && (
@@ -81,6 +81,32 @@ function GoalRow({ goal, canDelete, onDelete }) {
           <TrashIcon />
         </button>
       )}
+    </div>
+  );
+}
+
+// Reusable score header: always home on left, away on right
+function ScoreHeader({ game, timerDisplay, timerColor = 'text-white' }) {
+  return (
+    <div className="flex items-center justify-center gap-4">
+      <p className="font-bebas text-white text-xl md:text-2xl text-right flex-1 leading-tight">
+        {game.home_team_name}
+      </p>
+      <div className="text-center shrink-0">
+        {timerDisplay && (
+          <p className={`font-bebas text-5xl tracking-widest ${timerColor}`}>{timerDisplay}</p>
+        )}
+        <div className="bg-pitch-800 rounded-2xl px-6 py-3">
+          <p className="font-bebas text-5xl text-white tracking-wider">
+            {game.home_score}
+            <span className="text-pitch-600 mx-2">—</span>
+            {game.away_score}
+          </p>
+        </div>
+      </div>
+      <p className="font-bebas text-white text-xl md:text-2xl flex-1 leading-tight">
+        {game.away_team_name}
+      </p>
     </div>
   );
 }
@@ -103,6 +129,9 @@ export default function GameDetail() {
   const [settingPotg,  setSettingPotg]  = useState(false);
   const [actioning,    setActioning]    = useState(false);
 
+  // Which goal panel is awaiting a goal log (home or away)
+  const [pendingGoalSide, setPendingGoalSide] = useState(null); // 'home' | 'away'
+
   const load = useCallback(() =>
     Promise.all([api.getGame(id), api.getPlayers(), api.getTeams()])
       .then(([g, p, t]) => {
@@ -116,13 +145,11 @@ export default function GameDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Sync timer from server whenever game id or status changes
   useEffect(() => {
     if (!game) return;
     setTimerSeconds(game.elapsed_seconds ?? 0);
   }, [game?.id, game?.status]);
 
-  // Tick the clock for live games
   useEffect(() => {
     if (!game || game.status !== 'live') return;
     const interval = setInterval(() => setTimerSeconds(s => s + 1), 1000);
@@ -132,9 +159,7 @@ export default function GameDetail() {
   // Derived team info
   const myTeam       = teams.find(t => t.id === user?.my_team_id);
   const myTeamIsHome = game?.home_team === myTeam?.id;
-  const opponentTeamId   = myTeamIsHome ? game?.away_team      : game?.home_team;
-  const opponentName     = myTeamIsHome ? game?.away_team_name : game?.home_team_name;
-  const myTeamPlayers    = players.filter(p => p.team_id === myTeam?.id);
+  const myTeamPlayers = players.filter(p => p.team_id === myTeam?.id);
 
   // ── Action handlers ──────────────────────────────────────────────────────────
 
@@ -151,7 +176,7 @@ export default function GameDetail() {
     }
   }
 
-  const startGame    = () => gameAction(() => api.startGame(id),    'Game started!');
+  const startGame      = () => gameAction(() => api.startGame(id),    'Game started!');
   const handleHalftime = async () => {
     setConfirmHalftime(false);
     await gameAction(() => api.halftimeGame(id), 'Half time!');
@@ -163,34 +188,39 @@ export default function GameDetail() {
   };
   const handleReopen   = () => gameAction(() => api.reopenGame(id),   'Game reopened');
 
-  async function logMyTeamGoal(player) {
+  // Open player picker for My Team's panel; log anonymous goal for opponent panel
+  function handleGoalButtonClick(side) {
+    const sideTeamId = side === 'home' ? game?.home_team : game?.away_team;
+    const isMyTeam   = sideTeamId === myTeam?.id;
+    if (isMyTeam) {
+      setPendingGoalSide(side);
+      setShowPlayerPicker(true);
+    } else {
+      logGoal({ team_id: sideTeamId });
+    }
+  }
+
+  async function logGoal({ player, team_id }) {
     setShowPlayerPicker(false);
+    setPendingGoalSide(null);
     try {
       await api.createGoal({
         game_id:         Number(id),
-        player_id:       player.id,
-        team_id:         myTeam?.id,
+        player_id:       player?.id ?? undefined,
+        team_id:         team_id ?? myTeam?.id,
         elapsed_seconds: timerSeconds,
       });
       await load();
-      toast(`Goal! ${player.name} ${Math.floor(timerSeconds / 60) + 1}'`);
+      if (player) toast(`Goal! ${player.name} ${Math.floor(timerSeconds / 60) + 1}'`);
+      else        toast('Goal logged');
     } catch (e) {
       toast(e.message, 'error');
     }
   }
 
-  async function logOpponentGoal() {
-    try {
-      await api.createGoal({
-        game_id:         Number(id),
-        team_id:         opponentTeamId,
-        elapsed_seconds: timerSeconds,
-      });
-      await load();
-      toast('Opponent goal logged');
-    } catch (e) {
-      toast(e.message, 'error');
-    }
+  function handlePlayerSelected(player) {
+    const team_id = pendingGoalSide === 'home' ? game?.home_team : game?.away_team;
+    logGoal({ player, team_id });
   }
 
   async function removeGoal(goalId) {
@@ -229,7 +259,9 @@ export default function GameDetail() {
   async function shareResult() {
     const myScore  = myTeamIsHome ? game.home_score : game.away_score;
     const oppScore = myTeamIsHome ? game.away_score : game.home_score;
-    const text = `${myTeam?.name ?? 'Us'} ${myScore}–${oppScore} ${opponentName} · ${formatDate(game.date)}`;
+    const oppName  = myTeamIsHome ? game.away_team_name : game.home_team_name;
+    const ha       = myTeamIsHome ? '(H)' : '(A)';
+    const text = `${myTeam?.name ?? 'Us'} ${ha} ${myScore}–${oppScore} ${oppName} · ${formatDate(game.date)}`;
     try {
       await navigator.clipboard.writeText(text);
       toast('Result copied!');
@@ -249,11 +281,9 @@ export default function GameDetail() {
   const isComplete  = game.status === 'complete';
   const canEdit     = !isComplete;
 
-  const myTeamGoals = (game.goals ?? []).filter(g => g.team_id === myTeam?.id);
-  const oppGoals    = (game.goals ?? []).filter(g => g.team_id === opponentTeamId);
-  const myScore     = myTeamIsHome ? game.home_score : game.away_score;
-  const oppScore    = myTeamIsHome ? game.away_score : game.home_score;
-  const result      = getResult(game, myTeam?.id);
+  const homeGoals = (game.goals ?? []).filter(g => g.team_id === game.home_team);
+  const awayGoals = (game.goals ?? []).filter(g => g.team_id === game.away_team);
+  const result    = getResult(game, myTeam?.id);
 
   // ── Scheduled ────────────────────────────────────────────────────────────────
   if (isScheduled) {
@@ -278,7 +308,7 @@ export default function GameDetail() {
             </div>
           </div>
 
-          <p className="text-pitch-400 text-xs mb-2">
+          <p className="text-pitch-400 text-xs mb-4">
             <span className="bg-gray-600 text-gray-200 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded mr-2">
               Scheduled
             </span>
@@ -286,9 +316,15 @@ export default function GameDetail() {
           </p>
 
           <div className="flex items-center justify-center gap-4 mt-4">
-            <p className="font-bebas text-white text-2xl text-right flex-1">{game.home_team_name}</p>
-            <span className="font-bebas text-pitch-500 text-3xl">vs</span>
-            <p className="font-bebas text-white text-2xl flex-1">{game.away_team_name}</p>
+            <div className="text-right flex-1">
+              <p className="font-bebas text-white text-2xl leading-tight">{game.home_team_name}</p>
+              <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
+            </div>
+            <span className="font-bebas text-pitch-500 text-3xl shrink-0">vs</span>
+            <div className="flex-1">
+              <p className="font-bebas text-white text-2xl leading-tight">{game.away_team_name}</p>
+              <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>
+            </div>
           </div>
 
           {game.notes && (
@@ -308,6 +344,8 @@ export default function GameDetail() {
 
   // ── Live ─────────────────────────────────────────────────────────────────────
   if (isLive) {
+    const homeIsMyTeam = game.home_team === myTeam?.id;
+
     return (
       <div>
         {/* Header */}
@@ -330,7 +368,7 @@ export default function GameDetail() {
             </div>
           </div>
 
-          {/* Live badge + timer */}
+          {/* Live badge + half-time/full-time controls */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="relative flex h-2.5 w-2.5">
@@ -340,7 +378,6 @@ export default function GameDetail() {
               <span className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Live</span>
             </div>
 
-            {/* Halftime / Fulltime controls */}
             {!confirmHalftime && !confirmFulltime && (
               <div className="flex gap-2">
                 <button
@@ -381,59 +418,59 @@ export default function GameDetail() {
             <p className="text-pitch-500 text-[10px] uppercase tracking-widest mt-0.5">{formatDate(game.date)}</p>
           </div>
 
-          {/* Score */}
+          {/* Score — always home left, away right */}
           <div className="flex items-center justify-center gap-4">
-            <p className="font-bebas text-white text-xl md:text-2xl text-right flex-1 leading-tight">{myTeam?.name ?? game.home_team_name}</p>
+            <div className="text-right flex-1">
+              <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.home_team_name}</p>
+              <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
+            </div>
             <div className="bg-pitch-800 rounded-2xl px-6 py-3 shrink-0">
               <p className="font-bebas text-5xl text-white tracking-wider">
-                {myScore}
+                {game.home_score}
                 <span className="text-pitch-600 mx-2">—</span>
-                {oppScore}
+                {game.away_score}
               </p>
             </div>
-            <p className="font-bebas text-white text-xl md:text-2xl flex-1 leading-tight">{opponentName}</p>
+            <div className="flex-1">
+              <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.away_team_name}</p>
+              <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>
+            </div>
           </div>
         </div>
 
-        {/* Goal panels */}
+        {/* Goal panels — always home left, away right; My Team panel has player picker */}
         <div className="grid grid-cols-2 divide-x divide-gray-200 border-b border-gray-200">
-          {/* My team panel */}
-          <div className="p-4">
-            <p className="font-bebas text-pitch-900 text-lg tracking-wide mb-2">{myTeam?.name ?? 'My Team'}</p>
-            <div className="divide-y divide-gray-100 mb-3">
-              {myTeamGoals.length === 0
-                ? <p className="text-gray-300 text-xs py-2">No goals yet</p>
-                : myTeamGoals.map(g => (
-                    <GoalRow key={g.id} goal={g} canDelete={canEdit} onDelete={removeGoal} />
-                  ))
-              }
+          {[
+            { side: 'home', name: game.home_team_name, goals: homeGoals, isMyTeam: homeIsMyTeam },
+            { side: 'away', name: game.away_team_name, goals: awayGoals, isMyTeam: !homeIsMyTeam },
+          ].map(panel => (
+            <div key={panel.side} className="p-4">
+              <p className="font-bebas text-pitch-900 text-lg tracking-wide mb-2 truncate">{panel.name}</p>
+              <div className="divide-y divide-gray-100 mb-3">
+                {panel.goals.length === 0
+                  ? <p className="text-gray-300 text-xs py-2">No goals yet</p>
+                  : panel.goals.map(g => (
+                      <GoalRow key={g.id} goal={g} canDelete={canEdit} onDelete={removeGoal} />
+                    ))
+                }
+              </div>
+              {panel.isMyTeam ? (
+                <button
+                  onClick={() => handleGoalButtonClick(panel.side)}
+                  className="w-full bg-pitch-800 hover:bg-pitch-700 text-white text-xs font-bold py-2 rounded-lg transition-colors"
+                >
+                  + Goal
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleGoalButtonClick(panel.side)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-pitch-700 text-xs font-bold py-2 rounded-lg transition-colors"
+                >
+                  + Goal
+                </button>
+              )}
             </div>
-            <button
-              onClick={() => setShowPlayerPicker(true)}
-              className="w-full bg-pitch-800 hover:bg-pitch-700 text-white text-xs font-bold py-2 rounded-lg transition-colors"
-            >
-              + Goal
-            </button>
-          </div>
-
-          {/* Opponent panel */}
-          <div className="p-4">
-            <p className="font-bebas text-pitch-900 text-lg tracking-wide mb-2 truncate">{opponentName ?? 'Opponent'}</p>
-            <div className="divide-y divide-gray-100 mb-3">
-              {oppGoals.length === 0
-                ? <p className="text-gray-300 text-xs py-2">No goals yet</p>
-                : oppGoals.map(g => (
-                    <GoalRow key={g.id} goal={g} canDelete={canEdit} onDelete={removeGoal} />
-                  ))
-              }
-            </div>
-            <button
-              onClick={logOpponentGoal}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-pitch-700 text-xs font-bold py-2 rounded-lg transition-colors"
-            >
-              + Goal
-            </button>
-          </div>
+          ))}
         </div>
 
         {/* POTG */}
@@ -445,15 +482,14 @@ export default function GameDetail() {
             setPotgPlayer={setPotgPlayer}
             settingPotg={settingPotg}
             savePotg={savePotg}
-            locked={false}
           />
         </div>
 
         {showPlayerPicker && (
           <PlayerPickerModal
             players={myTeamPlayers}
-            onSelect={logMyTeamGoal}
-            onClose={() => setShowPlayerPicker(false)}
+            onSelect={handlePlayerSelected}
+            onClose={() => { setShowPlayerPicker(false); setPendingGoalSide(null); }}
           />
         )}
       </div>
@@ -476,20 +512,26 @@ export default function GameDetail() {
             <span className="text-pitch-500 text-xs">{formatDate(game.date)}</span>
           </div>
 
-          {/* Frozen timer with label */}
           <div className="text-center mb-4">
             <p className="text-pitch-500 text-[10px] font-bold uppercase tracking-widest">First Half</p>
             <p className="font-bebas text-5xl text-amber-300 tracking-widest">{formatTimer(timerSeconds)}</p>
           </div>
 
+          {/* Score — always home left, away right */}
           <div className="flex items-center justify-center gap-4">
-            <p className="font-bebas text-white text-xl text-right flex-1">{myTeam?.name ?? game.home_team_name}</p>
+            <div className="text-right flex-1">
+              <p className="font-bebas text-white text-xl leading-tight">{game.home_team_name}</p>
+              <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
+            </div>
             <div className="bg-pitch-800 rounded-2xl px-6 py-3 shrink-0">
               <p className="font-bebas text-5xl text-white tracking-wider">
-                {myScore}<span className="text-pitch-600 mx-2">—</span>{oppScore}
+                {game.home_score}<span className="text-pitch-600 mx-2">—</span>{game.away_score}
               </p>
             </div>
-            <p className="font-bebas text-white text-xl flex-1">{opponentName}</p>
+            <div className="flex-1">
+              <p className="font-bebas text-white text-xl leading-tight">{game.away_team_name}</p>
+              <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>
+            </div>
           </div>
         </div>
 
@@ -498,19 +540,18 @@ export default function GameDetail() {
             ▶ Start Second Half
           </Btn>
 
-          {/* Goal summary */}
-          {(myTeamGoals.length > 0 || oppGoals.length > 0) && (
+          {(homeGoals.length > 0 || awayGoals.length > 0) && (
             <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                 <h2 className="font-bebas text-pitch-900 text-xl tracking-wide">⚽ First Half Goals</h2>
               </div>
               <div className="divide-y divide-gray-100 px-4">
-                {myTeamGoals.map(g => (
-                  <GoalRow key={g.id} goal={g} canDelete={true} onDelete={removeGoal} />
-                ))}
-                {oppGoals.map(g => (
-                  <GoalRow key={g.id} goal={g} canDelete={true} onDelete={removeGoal} />
-                ))}
+                {[...homeGoals, ...awayGoals]
+                  .sort((a, b) => a.elapsed_seconds - b.elapsed_seconds)
+                  .map(g => (
+                    <GoalRow key={g.id} goal={g} canDelete={true} onDelete={removeGoal} />
+                  ))
+                }
               </div>
             </section>
           )}
@@ -520,6 +561,10 @@ export default function GameDetail() {
   }
 
   // ── Complete ──────────────────────────────────────────────────────────────────
+  const myScore  = myTeamIsHome ? game.home_score : game.away_score;
+  const oppScore = myTeamIsHome ? game.away_score : game.home_score;
+  const oppName  = myTeamIsHome ? game.away_team_name : game.home_team_name;
+
   return (
     <div>
       <div className="bg-pitch-900 px-4 md:px-6 py-5">
@@ -555,21 +600,26 @@ export default function GameDetail() {
           </div>
         )}
 
+        {/* Score — always home left, away right */}
         <div className="flex items-center justify-center gap-4">
-          <p className="font-bebas text-white text-xl md:text-2xl text-right flex-1 leading-tight">
-            {myTeam?.name ?? game.home_team_name}
-          </p>
+          <div className="text-right flex-1">
+            <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.home_team_name}</p>
+            <p className="text-[10px] uppercase tracking-widest text-pitch-500">Home</p>
+          </div>
           <div className="bg-pitch-800 rounded-2xl px-6 py-3 shrink-0">
             <p className="font-bebas text-5xl text-white tracking-wider">
-              {myScore}<span className="text-pitch-600 mx-2">—</span>{oppScore}
+              {game.home_score}<span className="text-pitch-600 mx-2">—</span>{game.away_score}
             </p>
           </div>
-          <p className="font-bebas text-white text-xl md:text-2xl flex-1 leading-tight">{opponentName}</p>
+          <div className="flex-1">
+            <p className="font-bebas text-white text-xl md:text-2xl leading-tight">{game.away_team_name}</p>
+            <p className="text-[10px] uppercase tracking-widest text-pitch-500">Away</p>
+          </div>
         </div>
 
         {result && (
           <p className={`font-bebas text-base tracking-widest text-center mt-3 ${RESULT_COLOR[result]}`}>
-            {RESULT_LABEL[result]}
+            {myTeam?.name} — {RESULT_LABEL[result]} {myScore}–{oppScore} {oppName}
           </p>
         )}
 
@@ -579,7 +629,6 @@ export default function GameDetail() {
       </div>
 
       <div className="p-4 md:p-6 max-w-2xl space-y-6">
-        {/* Share + admin reopen */}
         <div className="flex gap-3">
           <Btn variant="secondary" onClick={shareResult}>📋 Share Result</Btn>
           {user?.role === 'admin' && (
@@ -587,7 +636,6 @@ export default function GameDetail() {
           )}
         </div>
 
-        {/* Full goal log */}
         {(game.goals ?? []).length > 0 && (
           <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
@@ -601,7 +649,6 @@ export default function GameDetail() {
           </section>
         )}
 
-        {/* POTG — display only when complete */}
         {game.player_of_game && (
           <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
@@ -632,7 +679,6 @@ export default function GameDetail() {
   );
 }
 
-// Extracted to avoid repeating POTG form in live/halftime states
 function PotgSection({ game, myTeamPlayers, potgPlayer, setPotgPlayer, settingPotg, savePotg }) {
   return (
     <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">

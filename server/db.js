@@ -171,6 +171,37 @@ if (!scoreOverrideCols.includes('score_home_override')) {
   db.exec('ALTER TABLE games ADD COLUMN score_away_override INTEGER');
 }
 
+// Seasons table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS seasons (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    name      TEXT    NOT NULL,
+    year      INTEGER,
+    is_active INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
+// Migration: add season_id to games
+const seasonColCheck = db.pragma('table_info(games)').map(c => c.name);
+if (!seasonColCheck.includes('season_id')) {
+  db.exec('ALTER TABLE games ADD COLUMN season_id INTEGER REFERENCES seasons(id) ON DELETE SET NULL');
+}
+
+// Seed: create initial season from team data if none exists
+function seedInitialSeason() {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM seasons').get().c;
+  if (count > 0) return;
+  const primaryTeam = db.prepare('SELECT season FROM teams WHERE is_my_team = 1 LIMIT 1').get();
+  const seasonName  = primaryTeam?.season || '2024';
+  const year        = parseInt(seasonName, 10);
+  const { lastInsertRowid: seasonId } = db.prepare(
+    'INSERT INTO seasons (name, year, is_active) VALUES (?, ?, 1)'
+  ).run(seasonName, isNaN(year) ? null : year);
+  db.prepare('UPDATE games SET season_id = ?').run(seasonId);
+  console.log(`Seeded initial season "${seasonName}" (id=${seasonId})`);
+}
+seedInitialSeason();
+
 function seedAdmin() {
   const existing = db.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (existing.count > 0) return;

@@ -64,6 +64,14 @@ export default function GameForm() {
 
   async function handleAddOpponent() {
     if (!newOpponentName.trim()) return;
+    // If a team with this name already exists, select it instead of creating a duplicate
+    const existing = teams.find(t => t.name.toLowerCase() === newOpponentName.trim().toLowerCase());
+    if (existing) {
+      set('opponent', String(existing.id));
+      setNewOpponentName('');
+      setAddingOpponent(false);
+      return;
+    }
     setSavingOpponent(true);
     try {
       const team = await api.createTeam({ name: newOpponentName.trim() });
@@ -83,14 +91,44 @@ export default function GameForm() {
     setError(null);
     setSaving(true);
 
-    const myTeam     = teams.find(t => t.id === user?.my_team_id) ?? teams[0];
-    const myTeamId   = myTeam?.id;
-    const opponentId = Number(form.opponent);
+    let resolvedOpponentId;
+
+    if (addingOpponent) {
+      if (!newOpponentName.trim()) {
+        setError('Please add an opponent name or cancel to select an existing team.');
+        setSaving(false);
+        return;
+      }
+      // Check for existing team with same name
+      const existing = teams.find(t => t.name.toLowerCase() === newOpponentName.trim().toLowerCase());
+      if (existing) {
+        resolvedOpponentId = existing.id;
+        setNewOpponentName('');
+        setAddingOpponent(false);
+      } else {
+        try {
+          const team = await api.createTeam({ name: newOpponentName.trim() });
+          setTeams(prev => [...prev, team]);
+          setNewOpponentName('');
+          setAddingOpponent(false);
+          resolvedOpponentId = team.id;
+        } catch (e) {
+          setError(e.message);
+          setSaving(false);
+          return;
+        }
+      }
+    } else {
+      resolvedOpponentId = Number(form.opponent);
+    }
+
+    const myTeam   = teams.find(t => t.id === user?.my_team_id) ?? teams[0];
+    const myTeamId = myTeam?.id;
 
     const payload = {
       date:      form.date,
-      home_team: form.homeAway === 'home' ? myTeamId : opponentId,
-      away_team: form.homeAway === 'home' ? opponentId : myTeamId,
+      home_team: form.homeAway === 'home' ? myTeamId : resolvedOpponentId,
+      away_team: form.homeAway === 'home' ? resolvedOpponentId : myTeamId,
       notes:     form.notes.trim() || null,
     };
 
@@ -189,13 +227,13 @@ export default function GameForm() {
           {/* ── Matchup preview ───────────────────────────── */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex-1 text-right">
-                <p className="font-bebas text-pitch-900 text-lg leading-tight">{homeTeamName}</p>
+              <div className="flex-1 min-w-0 text-right">
+                <p className="font-bebas text-pitch-900 text-lg leading-tight truncate">{homeTeamName}</p>
                 <p className="text-[10px] uppercase tracking-widest text-pitch-400">Home</p>
               </div>
               <span className="text-pitch-400 text-sm shrink-0">vs</span>
-              <div className="flex-1">
-                <p className="font-bebas text-pitch-900 text-lg leading-tight">{awayTeamName}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-bebas text-pitch-900 text-lg leading-tight truncate">{awayTeamName}</p>
                 <p className="text-[10px] uppercase tracking-widest text-pitch-400">Away</p>
               </div>
             </div>

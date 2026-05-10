@@ -691,27 +691,14 @@ export default function GameDetail() {
           </section>
         )}
 
-        {game.player_of_game && (
-          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="font-bebas text-pitch-900 text-xl tracking-wide">⭐ Player of the Game</h2>
-            </div>
-            <div className="p-4">
-              <div className="flex items-center gap-3 bg-gold-500/10 border border-gold-400/30 rounded-xl px-4 py-3">
-                <span className="text-2xl">⭐</span>
-                <div>
-                  <p className="font-bold text-pitch-900">{game.player_of_game.player_name}</p>
-                  <p className="text-xs text-gray-500">#{game.player_of_game.jersey_number}</p>
-                  {game.player_of_game.created_by_name && (
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      Awarded by {game.player_of_game.created_by_name}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
+        <PotgSection
+          game={game}
+          myTeamPlayers={myTeamPlayers}
+          potgPlayer={potgPlayer}
+          setPotgPlayer={setPotgPlayer}
+          settingPotg={settingPotg}
+          savePotg={savePotg}
+        />
 
         {game.created_by_name && (
           <p className="text-[11px] text-gray-400 text-center">Added by {game.created_by_name}</p>

@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { NavLink, Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSeason } from '../context/SeasonContext';
+import { api } from '../api';
 
 const NAV = [
   {
@@ -88,6 +90,14 @@ function NavItem({ to, end, label, icon, mobile }) {
 export default function Layout() {
   const { user, logout } = useAuth();
   const { seasons, selectedSeason, selectedSeasonId, setSelectedSeasonId, isViewingNonActive } = useSeason();
+  const [myTeamName, setMyTeamName] = useState(null);
+
+  useEffect(() => {
+    if (!user?.my_team_id) { setMyTeamName(null); return; }
+    api.getTeam(user.my_team_id)
+      .then(t => setMyTeamName(t.name))
+      .catch(() => setMyTeamName(null));
+  }, [user?.my_team_id]);
 
   return (
     <div className="min-h-screen">
@@ -114,10 +124,12 @@ export default function Layout() {
           <h1 className="font-bebas text-white text-3xl tracking-widest leading-none mt-0.5">
             Matchday
           </h1>
-          <p className="text-pitch-400 text-xs mt-1.5 flex items-center gap-1.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Thunder FC
-          </p>
+          {myTeamName && (
+            <p className="text-pitch-400 text-xs mt-1.5 flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {myTeamName}
+            </p>
+          )}
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">

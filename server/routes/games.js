@@ -140,6 +140,72 @@ router.get('/:id', wrap((req, res) => {
   res.json(game);
 }));
 
+// GET /api/games/:id/share-text
+router.get('/:id/share-text', requireAuth, wrap((req, res) => {
+  const game = parseGame(stmtFindById.get(req.params.id));
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  if (game.status !== 'complete')
+    return res.status(400).json({ error: 'Game is not complete' });
+
+  const { season_id } = db.prepare('SELECT season_id FROM games WHERE id = ?').get(req.params.id) ?? {};
+  const season = season_id
+    ? db.prepare('SELECT name FROM seasons WHERE id = ?').get(season_id)
+    : null;
+
+  const myTeamId      = req.user.my_team_id ?? null;
+  const myIsHome      = game.home_team === myTeamId;
+  const myName        = (myIsHome ? game.home_team_name : game.away_team_name) ?? 'Us';
+  const oppName       = (myIsHome ? game.away_team_name : game.home_team_name) ?? 'Them';
+  const myTeamActual  = myIsHome ? game.home_team : game.away_team;
+  const oppTeamActual = myIsHome ? game.away_team : game.home_team;
+  const myScore       = myIsHome ? game.home_score : game.away_score;
+  const oppScore      = myIsHome ? game.away_score : game.home_score;
+
+  const myGoals  = (game.goals ?? []).filter(g => g.team_id === myTeamActual);
+  const oppGoals = (game.goals ?? []).filter(g => g.team_id === oppTeamActual);
+
+  const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const [yr, mo, dy] = game.date.split('-').map(Number);
+  const dateStr = `${DAYS[new Date(yr, mo - 1, dy).getDay()]} ${dy} ${MONTHS[mo - 1]} ${yr}`;
+
+  function abbrev(name) {
+    if (!name) return 'Unknown';
+    const parts = name.trim().split(/\s+/);
+    return parts.length === 1 ? parts[0] : `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  }
+
+  const SEP      = '─────────────────';
+  const awayTag  = (myTeamId && !myIsHome) ? ' (Away)' : '';
+  const scoreLine = `${myName}${awayTag} ${myScore} — ${oppScore} ${oppName}`;
+
+  let text = `⚽ MATCHDAY RESULT\n${SEP}\n${scoreLine}\n📅 ${dateStr}`;
+  if (season?.name) text += `\n🏁 ${season.name}`;
+
+  text += '\n\n⚽ GOALS';
+  if (myGoals.length > 0) {
+    text += `\n${myName}:`;
+    myGoals.forEach(g => { text += `\n  ${abbrev(g.player_name)} ${g.minute}'`; });
+  } else {
+    text += `\nNo goals scored by ${myName}`;
+  }
+  text += '\n';
+  if (oppGoals.length > 0) {
+    text += `\n${oppName}:`;
+    oppGoals.forEach(g => { text += `\n  ${abbrev(g.player_name)} ${g.minute}'`; });
+  } else {
+    text += `\nNo goals scored by ${oppName}`;
+  }
+
+  if (game.player_of_game?.player_name) {
+    text += `\n\n🏆 PLAYER OF THE GAME\n${abbrev(game.player_of_game.player_name)}`;
+  }
+
+  text += `\n\n${SEP}\nPowered by Matchday`;
+
+  res.json({ text });
+}));
+
 // PUT /api/games/:id  — edit date, teams, notes only
 router.put('/:id', requireAuth, wrap((req, res) => {
   const existing = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.id);

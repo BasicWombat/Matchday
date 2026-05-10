@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import GamesList from './pages/GamesList';
 import GameForm from './pages/GameForm';
 import GameDetail from './pages/GameDetail';
+import GameShare from './pages/GameShare';
 import Players from './pages/Players';
 import Stats from './pages/Stats';
 import Settings from './pages/Settings';
@@ -31,6 +32,7 @@ export default function App() {
         <ToastProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/games/:id/share" element={<GameShare />} />
             <Route element={<AuthGuard />}>
               <Route element={<Layout />}>
                 <Route index                 element={<Dashboard />} />

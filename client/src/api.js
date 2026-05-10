@@ -51,6 +51,9 @@ export const api = {
   // Manual score override — pass null values to clear
   setScore:     (id, d)  => req(`/api/games/${id}/score`, { method: 'PATCH', body: JSON.stringify(d) }),
 
+  // Share text (formatted, server-built)
+  getShareText: (id)     => req(`/api/games/${id}/share-text`),
+
   // Game state transitions
   startGame:    (id)     => req(`/api/games/${id}/start`,    { method: 'PATCH' }),
   halftimeGame: (id)     => req(`/api/games/${id}/halftime`, { method: 'PATCH' }),

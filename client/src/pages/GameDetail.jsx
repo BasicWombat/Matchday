@@ -183,9 +183,10 @@ export default function GameDetail() {
   const [showPlayerPicker, setShowPlayerPicker] = useState(false);
   const [confirmHalftime,  setConfirmHalftime]  = useState(false);
   const [confirmFulltime,  setConfirmFulltime]  = useState(false);
-  const [potgPlayer,   setPotgPlayer]   = useState('');
-  const [settingPotg,  setSettingPotg]  = useState(false);
-  const [actioning,    setActioning]    = useState(false);
+  const [potgPlayer,     setPotgPlayer]     = useState('');
+  const [settingPotg,    setSettingPotg]    = useState(false);
+  const [actioning,      setActioning]      = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Which goal panel is awaiting a goal log (home or away)
   const [pendingGoalSide, setPendingGoalSide] = useState(null); // 'home' | 'away'
@@ -324,19 +325,6 @@ export default function GameDetail() {
     }
   }
 
-  async function shareResult() {
-    const myScore  = myTeamIsHome ? game.home_score : game.away_score;
-    const oppScore = myTeamIsHome ? game.away_score : game.home_score;
-    const oppName  = myTeamIsHome ? game.away_team_name : game.home_team_name;
-    const ha       = myTeamIsHome ? '(H)' : '(A)';
-    const text = `${myTeam?.name ?? 'Us'} ${ha} ${myScore}–${oppScore} ${oppName} · ${formatDate(game.date)}`;
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('Result copied!');
-    } catch {
-      toast('Could not copy', 'error');
-    }
-  }
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -684,7 +672,7 @@ export default function GameDetail() {
 
       <div className="p-4 md:p-6 max-w-2xl space-y-6">
         <div className="flex gap-3">
-          <Btn variant="secondary" onClick={shareResult}>📋 Share Result</Btn>
+          <Btn variant="secondary" onClick={() => setShowShareModal(true)}>📋 Share Result</Btn>
           {user?.role === 'admin' && (
             <Btn variant="ghost" onClick={handleReopen} disabled={actioning}>Reopen Game</Btn>
           )}
@@ -727,6 +715,98 @@ export default function GameDetail() {
 
         {game.created_by_name && (
           <p className="text-[11px] text-gray-400 text-center">Added by {game.created_by_name}</p>
+        )}
+      </div>
+
+      {showShareModal && (
+        <ShareModal gameId={id} onClose={() => setShowShareModal(false)} />
+      )}
+    </div>
+  );
+}
+
+function ShareModal({ gameId, onClose }) {
+  const [shareText,  setShareText]  = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [fetchError, setFetchError] = useState(null);
+  const [copiedText, setCopiedText] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const shareUrl = `${window.location.origin}/games/${gameId}/share`;
+
+  useEffect(() => {
+    api.getShareText(gameId)
+      .then(({ text }) => { setShareText(text); setLoading(false); })
+      .catch(e => { setFetchError(e.message); setLoading(false); });
+  }, [gameId]);
+
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopiedText(true);
+      setTimeout(() => setCopiedText(false), 2000);
+    } catch { /* ignore */ }
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch { /* ignore */ }
+  }
+
+  async function nativeShare() {
+    const lines = shareText?.split('\n') ?? [];
+    const title = `Matchday Result — ${lines[2] ?? 'Match'}`;
+    try {
+      await navigator.share({ title, text: shareText, url: shareUrl });
+    } catch { /* user cancelled */ }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60" />
+      <div
+        className="relative bg-white rounded-t-2xl md:rounded-2xl w-full max-w-md p-5 pb-safe md:pb-5"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bebas text-pitch-900 text-2xl tracking-wide">Share Result</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 text-xl leading-none">✕</button>
+        </div>
+
+        {loading && <div className="flex justify-center py-8"><Spinner /></div>}
+        {fetchError && <p className="text-red-500 text-sm text-center py-4">{fetchError}</p>}
+
+        {shareText && (
+          <>
+            <pre className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs text-pitch-800 whitespace-pre-wrap font-mono leading-relaxed mb-4 max-h-64 overflow-y-auto">
+              {shareText}
+            </pre>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={copyText}
+                className="w-full bg-pitch-800 hover:bg-pitch-700 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                {copiedText ? '✓ Copied!' : '📋 Copy Text'}
+              </button>
+              <button
+                onClick={copyLink}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-pitch-900 font-bold py-3 rounded-xl transition-colors"
+              >
+                {copiedLink ? '✓ Copied!' : '🔗 Copy Link'}
+              </button>
+              {typeof navigator.share === 'function' && (
+                <button
+                  onClick={nativeShare}
+                  className="w-full bg-pitch-50 hover:bg-pitch-100 text-pitch-800 font-bold py-3 rounded-xl transition-colors"
+                >
+                  ↗ Share
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

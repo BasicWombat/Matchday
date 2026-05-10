@@ -10,28 +10,52 @@ export default function Account() {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [displayName, setDisplayName] = useState(user?.display_name ?? '');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    display_name: user?.display_name ?? '',
+    username:     user?.username ?? '',
+    email:        user?.email ?? '',
+  });
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword,     setNewPassword]     = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving,          setSaving]          = useState(false);
+  const [formError,       setFormError]       = useState(null);
+
+  function set(field, value) {
+    setForm(f => ({ ...f, [field]: value }));
+  }
 
   async function handleSave(e) {
     e.preventDefault();
-    if (password && password !== confirm) {
-      toast('Passwords do not match', 'error');
-      return;
+    setFormError(null);
+
+    if (!form.display_name.trim()) { setFormError('Display name is required'); return; }
+    if (!form.username.trim())     { setFormError('Username is required'); return; }
+    if (newPassword) {
+      if (!currentPassword) { setFormError('Current password is required to set a new password'); return; }
+      if (newPassword !== confirmPassword) { setFormError('New passwords do not match'); return; }
     }
+
     setSaving(true);
     try {
-      const payload = { display_name: displayName };
-      if (password) payload.password = password;
+      const payload = {
+        display_name: form.display_name.trim(),
+        username:     form.username.trim(),
+        email:        form.email.trim() || null,
+      };
+      if (newPassword) {
+        payload.current_password = currentPassword;
+        payload.password         = newPassword;
+      }
       const updated = await api.updateUser(user.id, payload);
-      setUser(prev => ({ ...prev, display_name: updated.display_name }));
+      setUser(prev => ({ ...prev, ...updated }));
+      setForm({ display_name: updated.display_name, username: updated.username, email: updated.email ?? '' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
       toast('Account updated!');
-      setPassword('');
-      setConfirm('');
     } catch (err) {
-      toast(err.message, 'error');
+      setFormError(err.message);
     } finally {
       setSaving(false);
     }
@@ -51,54 +75,103 @@ export default function Account() {
           </button>
         }
       />
-      <div className="p-4 md:p-6 max-w-md space-y-6">
-        <form onSubmit={handleSave} className="space-y-4">
+      <div className="p-4 md:p-6 max-w-md">
+        <form onSubmit={handleSave} className="space-y-5">
+
+          {/* ── Profile ───────────────────────────────────────── */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
               Display Name
             </label>
             <input
               type="text"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
               required
+              value={form.display_name}
+              onChange={e => set('display_name', e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
             />
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
-              New Password <span className="text-gray-400 normal-case font-normal">(leave blank to keep)</span>
+              Username
             </label>
             <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="New password…"
+              type="text"
+              required
+              value={form.username}
+              onChange={e => set('username', e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
             />
           </div>
-          {password && (
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
+              Email <span className="text-gray-400 normal-case font-normal">(optional)</span>
+            </label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+            />
+          </div>
+
+          {/* ── Change Password ────────────────────────────────── */}
+          <div className="border-t border-gray-100 pt-5 space-y-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-pitch-600">Change Password</p>
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
-                Confirm Password
+                Current Password
               </label>
               <input
                 type="password"
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                placeholder="Confirm new password…"
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                placeholder="Required to change your password"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
               />
             </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="Leave blank to keep current"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+              />
+            </div>
+            {newPassword && (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-pitch-600 mb-1.5">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ── Role (read-only) ───────────────────────────────── */}
+          <p className="text-xs text-gray-400">
+            Role: <span className="font-mono text-pitch-600">{user?.role}</span>
+          </p>
+
+          {formError && (
+            <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>
           )}
+
           <Btn type="submit" variant="primary" size="md" disabled={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
           </Btn>
         </form>
-        <div className="text-xs text-gray-400 space-y-1 pt-2 border-t border-gray-100">
-          <p>Username: <span className="font-mono text-pitch-600">{user?.username}</span></p>
-          <p>Role: <span className="font-mono text-pitch-600">{user?.role}</span></p>
-        </div>
       </div>
     </div>
   );

@@ -70,8 +70,15 @@ export default function Settings() {
   // Users (admin only)
   const [users,        setUsers]        = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [newUser,      setNewUser]      = useState({ username: '', display_name: '', password: '', role: 'member' });
+  const [newUser,      setNewUser]      = useState({ username: '', display_name: '', email: '', password: '', confirmPassword: '', role: 'member' });
   const [addingUser,   setAddingUser]   = useState(false);
+  const [addUserError, setAddUserError] = useState(null);
+
+  // Edit user modal
+  const [editingUser,    setEditingUser]    = useState(null);
+  const [editUserForm,   setEditUserForm]   = useState(null);
+  const [editUserSaving, setEditUserSaving] = useState(false);
+  const [editUserError,  setEditUserError]  = useState(null);
 
   useEffect(() => {
     api.getTeams()
@@ -251,27 +258,86 @@ export default function Settings() {
 
   async function handleAddUser(e) {
     e.preventDefault();
+    setAddUserError(null);
+    if (newUser.password !== newUser.confirmPassword) {
+      setAddUserError('Passwords do not match');
+      return;
+    }
     setAddingUser(true);
     try {
-      const created = await api.createUser(newUser);
+      const { confirmPassword: _, ...payload } = newUser;
+      const created = await api.createUser({ ...payload, email: payload.email || null });
       setUsers(prev => [...prev, created]);
-      setNewUser({ username: '', display_name: '', password: '', role: 'member' });
+      setNewUser({ username: '', display_name: '', email: '', password: '', confirmPassword: '', role: 'member' });
       toast(`User "${created.display_name}" created!`);
     } catch (err) {
-      toast(err.message, 'error');
+      setAddUserError(err.message);
     } finally {
       setAddingUser(false);
     }
   }
 
   async function handleDeleteUser(u) {
-    if (!window.confirm(`Delete user "${u.display_name}" (@${u.username})? This cannot be undone.`)) return;
+    if (!window.confirm(
+      `Delete "${u.display_name}"? This cannot be undone. Their game and goal records will be kept.`
+    )) return;
     try {
       await api.deleteUser(u.id);
       setUsers(prev => prev.filter(x => x.id !== u.id));
       toast(`User "${u.display_name}" deleted.`);
     } catch (err) {
       toast(err.message, 'error');
+    }
+  }
+
+  function startEditUser(u) {
+    setEditingUser(u);
+    setEditUserForm({
+      display_name:    u.display_name,
+      username:        u.username,
+      email:           u.email ?? '',
+      role:            u.role,
+      newPassword:     '',
+      confirmPassword: '',
+    });
+    setEditUserError(null);
+  }
+
+  function cancelEditUser() {
+    setEditingUser(null);
+    setEditUserForm(null);
+    setEditUserError(null);
+  }
+
+  async function handleEditUser(e) {
+    e.preventDefault();
+    setEditUserError(null);
+    if (!editUserForm.display_name.trim()) { setEditUserError('Display name is required'); return; }
+    if (!editUserForm.username.trim())     { setEditUserError('Username is required'); return; }
+    if (editUserForm.newPassword && editUserForm.newPassword !== editUserForm.confirmPassword) {
+      setEditUserError('Passwords do not match');
+      return;
+    }
+    setEditUserSaving(true);
+    try {
+      const payload = {
+        display_name: editUserForm.display_name.trim(),
+        username:     editUserForm.username.trim(),
+        email:        editUserForm.email.trim() || null,
+        role:         editUserForm.role,
+      };
+      if (editUserForm.newPassword) payload.password = editUserForm.newPassword;
+      const updated = await api.updateUser(editingUser.id, payload);
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? updated : u));
+      if (editingUser.id === currentUser.id) {
+        setUser(prev => ({ ...prev, ...updated }));
+      }
+      cancelEditUser();
+      toast(`User "${updated.display_name}" updated!`);
+    } catch (err) {
+      setEditUserError(err.message);
+    } finally {
+      setEditUserSaving(false);
     }
   }
 
@@ -680,22 +746,39 @@ export default function Settings() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-pitch-900 text-sm truncate">{u.display_name}</p>
-                        {u.role === 'admin' && (
+                        {u.role === 'admin' ? (
                           <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-gold-600 bg-gold-100 border border-gold-300 px-1.5 py-0.5 rounded">
                             Admin
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded">
+                            Member
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-gray-400">@{u.username}</p>
+                      {u.email
+                        ? <p className="text-xs text-gray-400">{u.email}</p>
+                        : <p className="text-xs text-gray-300 italic">No email set</p>
+                      }
                     </div>
-                    <button
-                      onClick={() => handleDeleteUser(u)}
-                      disabled={u.id === currentUser.id}
-                      title={u.id === currentUser.id ? 'Cannot delete yourself' : 'Delete user'}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
-                    >
-                      <TrashIcon />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => startEditUser(u)}
+                        className="p-1.5 text-gray-400 hover:text-pitch-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Edit user"
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(u)}
+                        disabled={u.id === currentUser.id}
+                        title={u.id === currentUser.id ? 'You cannot delete your own account' : 'Delete user'}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {!loadingUsers && users.length === 0 && (
@@ -708,6 +791,9 @@ export default function Settings() {
             <section>
               <h2 className="font-bebas text-pitch-900 text-2xl tracking-wide mb-1">Add User</h2>
               <form onSubmit={handleAddUser} className="space-y-3">
+                {addUserError && (
+                  <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addUserError}</p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Display Name</label>
@@ -732,6 +818,18 @@ export default function Settings() {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">
+                    Email <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="user@example.com"
+                    value={newUser.email}
+                    onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Password</label>
@@ -745,16 +843,27 @@ export default function Settings() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Role</label>
-                    <select
-                      value={newUser.role}
-                      onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Confirm Password</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Confirm"
+                      value={newUser.confirmPassword}
+                      onChange={e => setNewUser(p => ({ ...p, confirmPassword: e.target.value }))}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
-                    >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Role</label>
+                  <select
+                    value={newUser.role}
+                    onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
                 <Btn type="submit" variant="primary" size="sm" disabled={addingUser}>
                   {addingUser ? '…' : 'Add User'}
@@ -765,6 +874,97 @@ export default function Settings() {
         )}
 
       </div>
+
+      {/* ── Edit User Modal ─────────────────────────────────── */}
+      {editingUser && editUserForm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-semibold text-pitch-900">Edit User</h3>
+              <button onClick={cancelEditUser} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">✕</button>
+            </div>
+            <form onSubmit={handleEditUser} className="px-5 py-4 space-y-3">
+              {editUserError && (
+                <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{editUserError}</p>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editUserForm.display_name}
+                  onChange={e => setEditUserForm(f => ({ ...f, display_name: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Username</label>
+                <input
+                  type="text"
+                  required
+                  value={editUserForm.username}
+                  onChange={e => setEditUserForm(f => ({ ...f, username: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">
+                  Email <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="user@example.com"
+                  value={editUserForm.email}
+                  onChange={e => setEditUserForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Role</label>
+                <select
+                  value={editUserForm.role}
+                  onChange={e => setEditUserForm(f => ({ ...f, role: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">
+                  New Password <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="Leave blank to keep unchanged"
+                  value={editUserForm.newPassword}
+                  onChange={e => setEditUserForm(f => ({ ...f, newPassword: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Leave blank to keep the current password unchanged</p>
+              </div>
+              {editUserForm.newPassword && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={editUserForm.confirmPassword}
+                    onChange={e => setEditUserForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                  />
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <Btn type="submit" variant="primary" size="sm" disabled={editUserSaving}>
+                  {editUserSaving ? 'Saving…' : 'Save Changes'}
+                </Btn>
+                <Btn type="button" variant="ghost" size="sm" onClick={cancelEditUser}>Cancel</Btn>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

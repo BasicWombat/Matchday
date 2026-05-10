@@ -115,6 +115,12 @@ const pogColNames = db.pragma('table_info(player_of_game)').map(c => c.name);
 if (!pogColNames.includes('created_by'))
   db.exec('ALTER TABLE player_of_game ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
 
+// Migration: add email to users
+const emailUserCols = db.pragma('table_info(users)').map(c => c.name);
+if (!emailUserCols.includes('email')) {
+  db.exec('ALTER TABLE users ADD COLUMN email TEXT');
+}
+
 // Migration: add my_team_id to users (per-account My Team preference)
 const userCols = db.pragma('table_info(users)').map(c => c.name);
 if (!userCols.includes('my_team_id')) {

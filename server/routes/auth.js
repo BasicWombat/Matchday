@@ -23,7 +23,7 @@ router.post('/logout', (req, res) => res.json({ ok: true }));
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
   const user = db.prepare(
-    'SELECT id, username, display_name, role, my_team_id, created_at FROM users WHERE id = ?'
+    'SELECT id, username, display_name, email, role, my_team_id, created_at FROM users WHERE id = ?'
   ).get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);

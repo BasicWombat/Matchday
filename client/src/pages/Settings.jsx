@@ -3,6 +3,7 @@ import { api } from '../api';
 import { Spinner, ErrorState, PageHeader, Btn } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
+import { useSeason } from '../context/SeasonContext';
 
 function PencilIcon() {
   return (
@@ -30,8 +31,24 @@ export default function Settings() {
   const toast = useToast();
   const { user: currentUser, setUser } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
+  const { seasons, refreshSeasons, setSelectedSeasonId } = useSeason();
 
   const [tab, setTab] = useState('teams');
+
+  // Seasons
+  const [seasonEditingId,   setSeasonEditingId]   = useState(null);
+  const [seasonEditName,    setSeasonEditName]     = useState('');
+  const [seasonEditYear,    setSeasonEditYear]     = useState('');
+  const [seasonEditSaving,  setSeasonEditSaving]   = useState(false);
+  const [newSeason,         setNewSeason]          = useState({ name: '', year: '' });
+  const [addingSeason,      setAddingSeason]       = useState(false);
+  const [justCreated,       setJustCreated]        = useState(null);
+  const [settingActiveId,   setSettingActiveId]    = useState(null);
+  const seasonEditRef = useRef(null);
+
+  useEffect(() => {
+    if (seasonEditingId !== null) seasonEditRef.current?.focus();
+  }, [seasonEditingId]);
 
   // Teams
   const [teams,   setTeams]   = useState([]);
@@ -158,6 +175,78 @@ export default function Settings() {
     }
   }
 
+  // ── Seasons ────────────────────────────────────────────────────────────────
+
+  function startSeasonEdit(s) {
+    setSeasonEditingId(s.id);
+    setSeasonEditName(s.name);
+    setSeasonEditYear(s.year ? String(s.year) : '');
+  }
+  function cancelSeasonEdit() { setSeasonEditingId(null); }
+
+  async function saveSeasonEdit(id) {
+    if (!seasonEditName.trim()) return;
+    setSeasonEditSaving(true);
+    try {
+      await api.updateSeason(id, { name: seasonEditName.trim(), year: seasonEditYear || null });
+      await refreshSeasons();
+      setSeasonEditingId(null);
+      toast('Season updated!');
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setSeasonEditSaving(false);
+    }
+  }
+
+  async function handleSetActiveSeason(id) {
+    setSettingActiveId(id);
+    try {
+      await api.setActiveSeason(id);
+      await refreshSeasons();
+      setSelectedSeasonId(id);
+      toast('Active season updated!');
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setSettingActiveId(null);
+    }
+  }
+
+  async function handleDeleteSeason(s) {
+    if (!window.confirm(`Delete ${s.name}? This cannot be undone.`)) return;
+    try {
+      await api.deleteSeason(s.id);
+      await refreshSeasons();
+      toast(`"${s.name}" deleted.`);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  async function handleAddSeason(e) {
+    e.preventDefault();
+    if (!newSeason.name.trim()) return;
+    setAddingSeason(true);
+    try {
+      const created = await api.createSeason({ name: newSeason.name.trim(), year: newSeason.year || null });
+      await refreshSeasons();
+      setNewSeason({ name: '', year: '' });
+      setJustCreated(created);
+      toast(`"${created.name}" created!`);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setAddingSeason(false);
+    }
+  }
+
+  async function handleSetJustCreatedActive() {
+    if (!justCreated) return;
+    await handleSetActiveSeason(justCreated.id);
+    setJustCreated(null);
+  }
+
   // ── Users ──────────────────────────────────────────────────────────────────
 
   async function handleAddUser(e) {
@@ -192,7 +281,7 @@ export default function Settings() {
   if (loading)          return <Spinner />;
 
   const myTeam = teams.find(t => t.id === currentUser?.my_team_id);
-  const tabs   = isAdmin ? ['teams', 'users'] : null;
+  const tabs   = isAdmin ? ['teams', 'seasons', 'users'] : null;
 
   return (
     <div>
@@ -419,6 +508,160 @@ export default function Settings() {
                   </div>
                 </form>
               )}
+            </section>
+          </>
+        )}
+
+        {/* ══ Seasons tab (admin only) ════════════════════════ */}
+        {tab === 'seasons' && isAdmin && (
+          <>
+            {/* Season list */}
+            <section>
+              <h2 className="font-bebas text-pitch-900 text-2xl tracking-wide mb-3">Seasons</h2>
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+                {seasons.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-6">No seasons yet.</p>
+                )}
+                {seasons.map(s => {
+                  const isActive  = s.is_active === 1;
+                  const hasGames  = s.game_count > 0;
+                  const canDelete = !isActive && !hasGames;
+                  const deleteTitle = isActive
+                    ? 'Cannot delete the active season'
+                    : hasGames
+                    ? `Cannot delete: ${s.game_count} game${s.game_count !== 1 ? 's' : ''} attached`
+                    : 'Delete season';
+
+                  return (
+                    <div key={s.id} className="px-4 py-3">
+                      {seasonEditingId === s.id ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              ref={seasonEditRef}
+                              type="text"
+                              value={seasonEditName}
+                              onChange={e => setSeasonEditName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter')  { e.preventDefault(); saveSeasonEdit(s.id); }
+                                if (e.key === 'Escape') cancelSeasonEdit();
+                              }}
+                              placeholder="Season name"
+                              className="flex-1 min-w-0 border border-pitch-400 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                            />
+                            <input
+                              type="number"
+                              value={seasonEditYear}
+                              onChange={e => setSeasonEditYear(e.target.value)}
+                              placeholder="Year"
+                              className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Btn size="sm" variant="primary" onClick={() => saveSeasonEdit(s.id)} disabled={seasonEditSaving || !seasonEditName.trim()}>
+                              {seasonEditSaving ? '…' : 'Save'}
+                            </Btn>
+                            <Btn size="sm" variant="ghost" onClick={cancelSeasonEdit}>Cancel</Btn>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-pitch-900 text-sm">{s.name}</p>
+                              {isActive && (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              {s.year ? `${s.year} · ` : ''}{s.game_count} game{s.game_count !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {!isActive && (
+                              <Btn
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleSetActiveSeason(s.id)}
+                                disabled={settingActiveId === s.id}
+                              >
+                                {settingActiveId === s.id ? '…' : 'Set Active'}
+                              </Btn>
+                            )}
+                            <button
+                              onClick={() => startSeasonEdit(s)}
+                              className="p-1.5 text-gray-400 hover:text-pitch-700 hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Edit season"
+                            >
+                              <PencilIcon />
+                            </button>
+                            <button
+                              onClick={() => canDelete && handleDeleteSeason(s)}
+                              disabled={!canDelete}
+                              title={deleteTitle}
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* "Set as active?" prompt after creation */}
+            {justCreated && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <p className="text-sm font-semibold text-amber-900 mb-3">
+                  Set <strong>{justCreated.name}</strong> as the active season?
+                </p>
+                <div className="flex gap-2">
+                  <Btn variant="primary" size="sm" onClick={handleSetJustCreatedActive}>Yes, set active</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => setJustCreated(null)}>No, keep current</Btn>
+                </div>
+              </div>
+            )}
+
+            {/* Add Season form */}
+            <section>
+              <h2 className="font-bebas text-pitch-900 text-2xl tracking-wide mb-3">Add Season</h2>
+              <form onSubmit={handleAddSeason} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">
+                      Name <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Spring 2025"
+                      value={newSeason.name}
+                      onChange={e => setNewSeason(f => ({ ...f, name: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">
+                      Year <span className="text-gray-400 normal-case font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 2025"
+                      value={newSeason.year}
+                      onChange={e => setNewSeason(f => ({ ...f, year: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                    />
+                  </div>
+                </div>
+                <Btn type="submit" variant="primary" size="sm" disabled={addingSeason || !newSeason.name.trim()}>
+                  {addingSeason ? 'Creating…' : 'Create Season'}
+                </Btn>
+              </form>
             </section>
           </>
         )}

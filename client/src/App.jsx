@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SeasonProvider } from './context/SeasonContext';
 import { Spinner } from './components/ui';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -34,7 +35,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/games/:id/share" element={<GameShare />} />
             <Route element={<AuthGuard />}>
-              <Route element={<Layout />}>
+              <Route element={<SeasonProvider><Layout /></SeasonProvider>}>
                 <Route index                 element={<Dashboard />} />
                 <Route path="games"          element={<GamesList />} />
                 <Route path="games/new"      element={<GameForm />} />

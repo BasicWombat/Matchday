@@ -19,6 +19,7 @@ app.use('/api/games',          require('./routes/games'));
 app.use('/api/goals',          require('./routes/goals'));
 app.use('/api/player-of-game', require('./routes/playerOfGame'));
 app.use('/api/stats',          require('./routes/stats'));
+app.use('/api/seasons',        require('./routes/seasons'));
 
 // ── Health ────────────────────────────────────────────────────────────────────
 

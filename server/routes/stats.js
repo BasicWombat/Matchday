@@ -2,16 +2,21 @@ const router = require('express').Router();
 const db = require('../db');
 const wrap = require('../lib/wrap');
 
-// GET /api/stats/top-scorers?team_id=X&season=X
-// Returns every player with their goal count, ranked descending.
-// Both filters are optional and can be combined.
-router.get('/top-scorers', wrap((req, res) => {
-  const { team_id, season } = req.query;
-  const conditions = [];
-  const params = [];
+function resolveSeasonId(season_id) {
+  if (season_id) return season_id;
+  return db.prepare('SELECT id FROM seasons WHERE is_active = 1 LIMIT 1').get()?.id ?? null;
+}
 
-  if (team_id) { conditions.push('p.team_id = ?'); params.push(team_id); }
-  if (season)  { conditions.push('t.season = ?');  params.push(season);  }
+// GET /api/stats/top-scorers?team_id=X&season_id=X
+router.get('/top-scorers', wrap((req, res) => {
+  const { team_id } = req.query;
+  const season_id   = resolveSeasonId(req.query.season_id);
+
+  const conditions = [];
+  const params     = [];
+
+  if (team_id)   { conditions.push('p.team_id = ?');    params.push(team_id); }
+  if (season_id) { conditions.push('ga.season_id = ?'); params.push(season_id); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -21,12 +26,12 @@ router.get('/top-scorers', wrap((req, res) => {
       p.name,
       p.jersey_number,
       p.team_id,
-      t.name   AS team_name,
-      t.season,
+      t.name AS team_name,
       COUNT(go.id) AS goals
     FROM   players p
-    JOIN   teams t  ON t.id = p.team_id
+    JOIN   teams t   ON t.id  = p.team_id
     LEFT JOIN goals go ON go.player_id = p.id
+    LEFT JOIN games ga ON ga.id = go.game_id
     ${where}
     GROUP  BY p.id
     ORDER  BY goals DESC, p.name ASC
@@ -35,14 +40,16 @@ router.get('/top-scorers', wrap((req, res) => {
   res.json(rows);
 }));
 
-// GET /api/stats/player-of-game-count?team_id=X
-// Returns every player with their player-of-game award count, ranked descending.
+// GET /api/stats/player-of-game-count?team_id=X&season_id=X
 router.get('/player-of-game-count', wrap((req, res) => {
   const { team_id } = req.query;
-  const conditions = [];
-  const params = [];
+  const season_id   = resolveSeasonId(req.query.season_id);
 
-  if (team_id) { conditions.push('p.team_id = ?'); params.push(team_id); }
+  const conditions = [];
+  const params     = [];
+
+  if (team_id)   { conditions.push('p.team_id = ?');    params.push(team_id); }
+  if (season_id) { conditions.push('ga.season_id = ?'); params.push(season_id); }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -55,8 +62,9 @@ router.get('/player-of-game-count', wrap((req, res) => {
       t.name AS team_name,
       COUNT(pg.id) AS awards
     FROM   players p
-    JOIN   teams t ON t.id = p.team_id
+    JOIN   teams t  ON t.id = p.team_id
     LEFT JOIN player_of_game pg ON pg.player_id = p.id
+    LEFT JOIN games ga ON ga.id = pg.game_id
     ${where}
     GROUP  BY p.id
     ORDER  BY awards DESC, p.name ASC

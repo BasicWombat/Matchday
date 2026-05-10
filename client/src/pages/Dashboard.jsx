@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, formatDate, getResult } from '../api';
 import { Spinner, ErrorState, EmptyState, LeaderRow } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { useSeason } from '../context/SeasonContext';
 
 const RESULT_STYLES = {
   W: { badge: 'bg-emerald-500 text-white', border: 'border-l-emerald-500' },
@@ -91,14 +92,22 @@ function MiniGameCard({ game, primaryTeamId }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { selectedSeasonId, selectedSeason } = useSeason();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([api.getGames(), api.getTeams(), api.getTopScorers(), api.getPotgCount()])
+    if (!selectedSeasonId) return;
+    const params = { season_id: selectedSeasonId };
+    Promise.all([
+      api.getGames(params),
+      api.getTeams(),
+      api.getTopScorers(params),
+      api.getPotgCount(params),
+    ])
       .then(([games, teams, scorers, potg]) => setData({ games, teams, scorers, potg }))
       .catch(e => setError(e.message));
-  }, []);
+  }, [selectedSeasonId]);
 
   if (error) return <ErrorState message={error} />;
   if (!data)  return <Spinner />;
@@ -149,7 +158,7 @@ export default function Dashboard() {
     <div>
       {/* ── Page header ─────────────────────────────────── */}
       <div className="bg-pitch-900 px-6 py-8">
-        <p className="text-gold-400 text-[10px] font-bold tracking-[0.2em] uppercase">Season 2024</p>
+        <p className="text-gold-400 text-[10px] font-bold tracking-[0.2em] uppercase">{selectedSeason?.name ?? 'Season'}</p>
         <div className="flex items-start justify-between gap-4 mt-1">
           <div>
             <h1 className="font-bebas text-white text-5xl tracking-wide leading-none">

@@ -41,8 +41,18 @@ export const api = {
   createPlayer: (d)      => req('/api/players', { method: 'POST', body: JSON.stringify(d) }),
   deletePlayer: (id)     => req(`/api/players/${id}`, { method: 'DELETE' }),
 
+  // Seasons
+  getSeasons:      ()       => req('/api/seasons'),
+  createSeason:    (d)      => req('/api/seasons', { method: 'POST', body: JSON.stringify(d) }),
+  updateSeason:    (id, d)  => req(`/api/seasons/${id}`, { method: 'PUT', body: JSON.stringify(d) }),
+  setActiveSeason: (id)     => req(`/api/seasons/${id}/set-active`, { method: 'PUT' }),
+  deleteSeason:    (id)     => req(`/api/seasons/${id}`, { method: 'DELETE' }),
+
   // Games
-  getGames:     ()       => req('/api/games'),
+  getGames:     (params) => {
+    const q = params ? `?${new URLSearchParams(params)}` : '';
+    return req(`/api/games${q}`);
+  },
   getGame:      (id)     => req(`/api/games/${id}`),
   createGame:   (d)      => req('/api/games', { method: 'POST', body: JSON.stringify(d) }),
   updateGame:   (id, d)  => req(`/api/games/${id}`, { method: 'PUT', body: JSON.stringify(d) }),
@@ -73,7 +83,7 @@ export const api = {
     const q = params ? `?${new URLSearchParams(params)}` : '';
     return req(`/api/stats/top-scorers${q}`);
   },
-  getPotgCount: (params) => {
+  getPotgCount:  (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : '';
     return req(`/api/stats/player-of-game-count${q}`);
   },

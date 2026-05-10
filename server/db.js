@@ -191,14 +191,11 @@ if (!seasonColCheck.includes('season_id')) {
 function seedInitialSeason() {
   const count = db.prepare('SELECT COUNT(*) AS c FROM seasons').get().c;
   if (count > 0) return;
-  const primaryTeam = db.prepare('SELECT season FROM teams WHERE is_my_team = 1 LIMIT 1').get();
-  const seasonName  = primaryTeam?.season || '2024';
-  const year        = parseInt(seasonName, 10);
   const { lastInsertRowid: seasonId } = db.prepare(
     'INSERT INTO seasons (name, year, is_active) VALUES (?, ?, 1)'
-  ).run(seasonName, isNaN(year) ? null : year);
+  ).run('Season 1', null);
   db.prepare('UPDATE games SET season_id = ?').run(seasonId);
-  console.log(`Seeded initial season "${seasonName}" (id=${seasonId})`);
+  console.log(`Seeded initial season "Season 1" (id=${seasonId})`);
 }
 seedInitialSeason();
 

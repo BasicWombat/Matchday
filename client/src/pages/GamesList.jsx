@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, formatDate, getResult } from '../api';
 import { Spinner, ErrorState, EmptyState, PageHeader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { useSeason } from '../context/SeasonContext';
 
 const RESULT = {
   W: { badge: 'bg-emerald-500 text-white', border: 'border-l-emerald-400' },
@@ -117,15 +118,17 @@ function GameCard({ game, primaryTeamId }) {
 
 export default function GamesList() {
   const { user } = useAuth();
+  const { selectedSeasonId, selectedSeason } = useSeason();
   const [games, setGames] = useState(null);
   const [teams, setTeams] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([api.getGames(), api.getTeams()])
+    if (!selectedSeasonId) return;
+    Promise.all([api.getGames({ season_id: selectedSeasonId }), api.getTeams()])
       .then(([g, t]) => { setGames(g); setTeams(t); })
       .catch(e => setError(e.message));
-  }, []);
+  }, [selectedSeasonId]);
 
   if (error) return <ErrorState message={error} />;
   if (!games) return <Spinner />;
@@ -135,7 +138,7 @@ export default function GamesList() {
   return (
     <div>
       <PageHeader
-        eyebrow="Season 2024"
+        eyebrow={selectedSeason?.name ?? 'Season'}
         title="All Games"
         action={
           <Link

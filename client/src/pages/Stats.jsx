@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDate, getResult } from '../api';
 import { Spinner, ErrorState, EmptyState, PageHeader, LeaderRow } from '../components/ui';
+import { useSeason } from '../context/SeasonContext';
 
 const BADGE_COLOR = { W: 'bg-emerald-500', L: 'bg-red-500', D: 'bg-gray-400' };
 
@@ -27,14 +28,22 @@ function FormBadge({ game, primaryTeamId }) {
 }
 
 export default function Stats() {
+  const { selectedSeasonId, selectedSeason } = useSeason();
   const [data,  setData]  = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    Promise.all([api.getGames(), api.getTeams(), api.getTopScorers(), api.getPotgCount()])
+    if (!selectedSeasonId) return;
+    const params = { season_id: selectedSeasonId };
+    Promise.all([
+      api.getGames(params),
+      api.getTeams(),
+      api.getTopScorers(params),
+      api.getPotgCount(params),
+    ])
       .then(([games, teams, scorers, potg]) => setData({ games, teams, scorers, potg }))
       .catch(e => setError(e.message));
-  }, []);
+  }, [selectedSeasonId]);
 
   if (error) return <ErrorState message={error} />;
   if (!data)  return <Spinner />;
@@ -50,7 +59,7 @@ export default function Stats() {
 
   return (
     <div>
-      <PageHeader eyebrow="Season 2024" title="Statistics" />
+      <PageHeader eyebrow={selectedSeason?.name ?? 'Season'} title="Statistics" />
 
       <div className="p-4 md:p-6 space-y-8 max-w-2xl">
         {/* ── Form Guide ──────────────────────────────────── */}

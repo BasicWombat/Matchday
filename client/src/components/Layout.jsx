@@ -1,5 +1,6 @@
 import { NavLink, Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSeason } from '../context/SeasonContext';
 
 const NAV = [
   {
@@ -86,13 +87,30 @@ function NavItem({ to, end, label, icon, mobile }) {
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { seasons, selectedSeason, selectedSeasonId, setSelectedSeasonId, isViewingNonActive } = useSeason();
 
   return (
     <div className="min-h-screen">
-      {/* ── Desktop sidebar ─────────────────────────────── */}
+      {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-56 bg-pitch-950 flex-col z-30 shadow-xl">
         <div className="px-5 py-6 border-b border-white/5">
-          <p className="text-gold-500 text-[10px] font-bold tracking-[0.2em] uppercase">Season 2024</p>
+          {seasons.length > 1 ? (
+            <select
+              value={selectedSeasonId ?? ''}
+              onChange={e => setSelectedSeasonId(Number(e.target.value))}
+              className="text-gold-500 text-[10px] font-bold tracking-[0.2em] uppercase bg-transparent border-none cursor-pointer focus:outline-none w-full appearance-none"
+            >
+              {seasons.map(s => (
+                <option key={s.id} value={s.id} className="text-pitch-900 font-normal normal-case tracking-normal">
+                  {s.name}{s.is_active ? ' ★' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-gold-500 text-[10px] font-bold tracking-[0.2em] uppercase">
+              {selectedSeason?.name ?? 'Matchday'}
+            </p>
+          )}
           <h1 className="font-bebas text-white text-3xl tracking-widest leading-none mt-0.5">
             Matchday
           </h1>
@@ -126,12 +144,39 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* ── Main content ────────────────────────────────── */}
+      {/* ── Main content ────────────────────────────────────── */}
       <main className="md:ml-56 min-h-screen pb-20 md:pb-0">
+        {/* Mobile season bar */}
+        <div className="md:hidden bg-pitch-950 border-b border-white/10 px-4 py-2 flex items-center gap-2">
+          <span className="text-gold-500 text-[10px] font-bold tracking-[0.15em] uppercase shrink-0">Season</span>
+          {seasons.length > 1 ? (
+            <select
+              value={selectedSeasonId ?? ''}
+              onChange={e => setSelectedSeasonId(Number(e.target.value))}
+              className="flex-1 text-gold-400 text-xs font-semibold bg-transparent border-none cursor-pointer focus:outline-none"
+            >
+              {seasons.map(s => (
+                <option key={s.id} value={s.id} className="text-pitch-900 font-normal">
+                  {s.name}{s.is_active ? ' ★' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-gold-400 text-xs font-semibold">{selectedSeason?.name ?? '—'}</span>
+          )}
+        </div>
+
+        {/* Non-active season banner */}
+        {isViewingNonActive && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 text-center">
+            Viewing <strong>{selectedSeason?.name}</strong> — this is not the current season
+          </div>
+        )}
+
         <Outlet />
       </main>
 
-      {/* ── Mobile bottom nav ───────────────────────────── */}
+      {/* ── Mobile bottom nav ───────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-pitch-950 border-t border-white/10 z-30">
         <div className="flex safe-area-inset-bottom">
           {NAV.map(item => (

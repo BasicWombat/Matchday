@@ -3,11 +3,13 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import { Spinner, ErrorState, PageHeader, Btn } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import { useSeason } from '../context/SeasonContext';
 
 const EMPTY = { date: '', opponent: '', homeAway: 'home', notes: '' };
 
 export default function GameForm() {
   const { user }   = useAuth();
+  const { activeSeason } = useSeason();
   const { id }     = useParams();
   const navigate   = useNavigate();
   const isEdit     = Boolean(id);
@@ -130,6 +132,14 @@ export default function GameForm() {
 
       <div className="p-4 md:p-6 max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-5">
+
+          {/* ── Season (read-only, new games only) ───────── */}
+          {!isEdit && activeSeason && (
+            <div className="flex items-center gap-2 bg-pitch-50 border border-pitch-200 rounded-lg px-3 py-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-pitch-500">Season</span>
+              <span className="text-sm font-semibold text-pitch-800">{activeSeason.name}</span>
+            </div>
+          )}
 
           {/* ── Date ──────────────────────────────────────── */}
           <div>

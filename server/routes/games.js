@@ -14,6 +14,8 @@ const GAME_SELECT = `
     g.status, g.started_at, g.first_half_duration_seconds,
     g.second_half_started_at, g.completed_at,
     g.score_home_override, g.score_away_override,
+    g.season_id,
+    s.name AS season_name,
     COALESCE(g.score_home_override, (SELECT COUNT(*) FROM goals WHERE game_id = g.id AND team_id = g.home_team)) AS home_score,
     COALESCE(g.score_away_override, (SELECT COUNT(*) FROM goals WHERE game_id = g.id AND team_id = g.away_team)) AS away_score,
     cu.display_name AS created_by_name,
@@ -56,11 +58,11 @@ const GAME_SELECT = `
   FROM games g
   LEFT JOIN teams ht ON ht.id = g.home_team
   LEFT JOIN teams at ON at.id = g.away_team
+  LEFT JOIN seasons s ON s.id = g.season_id
   LEFT JOIN users cu ON cu.id = g.created_by
   LEFT JOIN users uu ON uu.id = g.updated_by
 `;
 
-const stmtFindAll  = db.prepare(`${GAME_SELECT} ORDER BY g.date DESC, g.id DESC`);
 const stmtFindById = db.prepare(`${GAME_SELECT} WHERE g.id = ?`);
 
 function computeElapsedSeconds(game) {
@@ -102,9 +104,19 @@ function parseGame(row) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-// GET /api/games
+// GET /api/games — optional ?season_id=, defaults to active season
 router.get('/', wrap((req, res) => {
-  res.json(stmtFindAll.all().map(parseGame));
+  let { season_id } = req.query;
+
+  if (!season_id) {
+    const active = db.prepare('SELECT id FROM seasons WHERE is_active = 1 LIMIT 1').get();
+    if (active) season_id = active.id;
+  }
+
+  const where  = season_id ? 'WHERE g.season_id = ?' : '';
+  const params = season_id ? [season_id] : [];
+  const games  = db.prepare(`${GAME_SELECT} ${where} ORDER BY g.date DESC, g.id DESC`).all(...params);
+  res.json(games.map(parseGame));
 }));
 
 // POST /api/games
@@ -124,11 +136,13 @@ router.post('/', requireAuth, wrap((req, res) => {
   const htName = db.prepare('SELECT name FROM teams WHERE id = ?').get(home_team)?.name ?? '';
   const atName = db.prepare('SELECT name FROM teams WHERE id = ?').get(away_team)?.name ?? '';
 
+  const activeSeason = db.prepare('SELECT id FROM seasons WHERE is_active = 1 LIMIT 1').get();
+
   const { lastInsertRowid } = db
     .prepare(`INSERT INTO games
-      (date, home_team, away_team, home_team_name, away_team_name, notes, status, created_by, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?)`)
-    .run(date, home_team, away_team, htName, atName, notes ?? null, req.user.id, req.user.id);
+      (date, home_team, away_team, home_team_name, away_team_name, notes, status, season_id, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?)`)
+    .run(date, home_team, away_team, htName, atName, notes ?? null, activeSeason?.id ?? null, req.user.id, req.user.id);
 
   res.status(201).json(parseGame(stmtFindById.get(lastInsertRowid)));
 }));

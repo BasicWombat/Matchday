@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { Spinner, Btn } from '../components/ui';
 
@@ -262,6 +263,16 @@ function ScheduledLineupView({ game, myTeamPlayers, squadSize, toast, onLineupSa
         <span>{fieldCount} / {squadSize ?? '?'} on field</span>
         {!goalieId && fieldCount > 0 && <span className="text-amber-600 text-xs">· no goalie set</span>}
       </div>
+
+      {squadSize === null && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800">
+          ⚠ Players on field not configured —{' '}
+          <Link to="/settings" className="underline font-medium hover:text-amber-900">
+            go to Settings
+          </Link>{' '}
+          to set this for the current season
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {/* ON FIELD column */}

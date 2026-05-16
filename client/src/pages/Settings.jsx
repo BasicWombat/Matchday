@@ -646,10 +646,10 @@ export default function Settings() {
                                 placeholder="e.g. 8"
                                 className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
                               />
-                              <p className="text-[10px] text-gray-400 mt-0.5">Include the goalie</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">Include the goalie (e.g. 8 = 7 + goalie)</p>
                             </div>
                             <div>
-                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Preferred Rest (min)</label>
+                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Preferred Rest Time (mins)</label>
                               <input
                                 type="number"
                                 min="1"
@@ -658,10 +658,10 @@ export default function Settings() {
                                 placeholder="e.g. 5"
                                 className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
                               />
-                              <p className="text-[10px] text-gray-400 mt-0.5">Ready to rotate on</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">How long before a player is ready to come back on (e.g. 5)</p>
                             </div>
                             <div>
-                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Max Rest (min)</label>
+                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Maximum Rest Time (mins)</label>
                               <input
                                 type="number"
                                 min="1"
@@ -670,7 +670,7 @@ export default function Settings() {
                                 placeholder="e.g. 8"
                                 className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
                               />
-                              <p className="text-[10px] text-gray-400 mt-0.5">Flagged as overdue</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">Player flagged as overdue after this long on the bench (e.g. 8)</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
@@ -693,7 +693,8 @@ export default function Settings() {
                             </div>
                             <p className="text-xs text-gray-400">
                               {s.year ? `${s.year} · ` : ''}{s.game_count} game{s.game_count !== 1 ? 's' : ''}
-                              {s.squad_size ? ` · ${s.squad_size}v${s.squad_size}` : ''}
+                              {s.squad_size ? ` · ${s.squad_size} on field` : ''}
+                              {s.preferred_rest_minutes ? ` · ${s.preferred_rest_minutes} min rest` : ''}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">

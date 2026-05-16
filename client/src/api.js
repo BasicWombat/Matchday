@@ -78,6 +78,23 @@ export const api = {
   // Player of the Game
   setPlayerOfGame: (d)   => req('/api/player-of-game', { method: 'POST', body: JSON.stringify(d) }),
 
+  // Attendance
+  getGameAttendance:  (gameId)           => req(`/api/games/${gameId}/attendance`),
+  saveGameAttendance: (gameId, entries)  => req(`/api/games/${gameId}/attendance`, { method: 'POST', body: JSON.stringify(entries) }),
+  extendPlayerRest:   (gameId, playerId) => req(`/api/games/${gameId}/attendance/${playerId}/extend-rest`, { method: 'PATCH' }),
+
+  // Lineup
+  getGameLineup:  (gameId)        => req(`/api/games/${gameId}/lineup`),
+  saveGameLineup: (gameId, lineup) => req(`/api/games/${gameId}/lineup`, { method: 'POST', body: JSON.stringify(lineup) }),
+
+  // Substitutions
+  createSubstitution:    (gameId, d)     => req(`/api/games/${gameId}/substitution`, { method: 'POST', body: JSON.stringify(d) }),
+  deleteSubstitution:    (gameId, subId) => req(`/api/games/${gameId}/substitution/${subId}`, { method: 'DELETE' }),
+  getGameSubstitutions:  (gameId)        => req(`/api/games/${gameId}/substitutions`),
+
+  // Player time
+  getPlayerTime: (gameId, elapsedSeconds) => req(`/api/games/${gameId}/player-time?elapsed_seconds=${elapsedSeconds}`),
+
   // Stats
   getTopScorers: (params) => {
     const q = params ? `?${new URLSearchParams(params)}` : '';

@@ -46,12 +46,30 @@ router.put('/:id', requireAdmin, wrap((req, res) => {
   const season = db.prepare('SELECT * FROM seasons WHERE id = ?').get(req.params.id);
   if (!season) return res.status(404).json({ error: 'Season not found' });
 
-  const { name = season.name, year = season.year } = req.body ?? {};
-  if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
-  const parsedYear = year ? parseInt(year, 10) : null;
+  const {
+    name                 = season.name,
+    year                 = season.year,
+    squad_size           = season.squad_size,
+    preferred_rest_minutes = season.preferred_rest_minutes,
+    max_rest_minutes     = season.max_rest_minutes,
+  } = req.body ?? {};
 
-  db.prepare('UPDATE seasons SET name = ?, year = ? WHERE id = ?')
-    .run(name.trim(), parsedYear || null, req.params.id);
+  if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
+
+  const parsedYear         = year                  ? parseInt(year, 10)                  : null;
+  const parsedSquadSize    = squad_size             ? parseInt(squad_size, 10)            : null;
+  const parsedPreferredRest = preferred_rest_minutes ? parseInt(preferred_rest_minutes, 10) : null;
+  const parsedMaxRest      = max_rest_minutes       ? parseInt(max_rest_minutes, 10)      : null;
+
+  db.prepare(`
+    UPDATE seasons
+    SET name = ?, year = ?, squad_size = ?, preferred_rest_minutes = ?, max_rest_minutes = ?
+    WHERE id = ?
+  `).run(
+    name.trim(), parsedYear || null, parsedSquadSize || null,
+    parsedPreferredRest || null, parsedMaxRest || null,
+    req.params.id,
+  );
 
   res.json(seasonWithCount(req.params.id));
 }));

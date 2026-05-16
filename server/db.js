@@ -193,6 +193,46 @@ if (!seasonColCheck.includes('season_id')) {
   db.exec('ALTER TABLE games ADD COLUMN season_id INTEGER REFERENCES seasons(id) ON DELETE SET NULL');
 }
 
+// Migration: add squad configuration to seasons
+const seasonSquadCols = db.pragma('table_info(seasons)').map(c => c.name);
+if (!seasonSquadCols.includes('squad_size')) {
+  db.exec('ALTER TABLE seasons ADD COLUMN squad_size INTEGER');
+  db.exec('ALTER TABLE seasons ADD COLUMN preferred_rest_minutes INTEGER');
+  db.exec('ALTER TABLE seasons ADD COLUMN max_rest_minutes INTEGER');
+}
+
+// Attendance, lineup, and substitution tracking tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_attendance (
+    id                           INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id                      INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    player_id                    INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    is_present                   INTEGER NOT NULL DEFAULT 0,
+    wants_extra_rest             INTEGER NOT NULL DEFAULT 0,
+    extra_rest_extension_minutes INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(game_id, player_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS game_lineup (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id   INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    position  TEXT NOT NULL CHECK(position IN ('field', 'goalie', 'bench')),
+    UNIQUE(game_id, player_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS game_substitutions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id         INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    player_on_id    INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    player_off_id   INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    elapsed_seconds INTEGER NOT NULL,
+    game_minute     INTEGER NOT NULL,
+    is_goalie_swap  INTEGER NOT NULL DEFAULT 0,
+    half            TEXT    NOT NULL CHECK(half IN ('first', 'second'))
+  );
+`);
+
 // Seed: create initial season from team data if none exists
 function seedInitialSeason() {
   const count = db.prepare('SELECT COUNT(*) AS c FROM seasons').get().c;

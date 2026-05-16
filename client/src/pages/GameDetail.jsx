@@ -4,6 +4,8 @@ import { api, formatDate, getResult } from '../api';
 import { Spinner, ErrorState, Btn } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
+import { useSeason } from '../context/SeasonContext';
+import GameLineup from './GameLineup';
 
 const RESULT_LABEL = { W: 'Victory', L: 'Defeat', D: 'Draw' };
 const RESULT_COLOR  = { W: 'text-emerald-500', L: 'text-red-500', D: 'text-gray-400' };
@@ -169,11 +171,35 @@ function ScoreEditor({ game, onSave }) {
   );
 }
 
+function TabBar({ activeTab, onChange }) {
+  return (
+    <div className="flex border-b border-gray-200 bg-white">
+      {[
+        { key: 'match',  label: '⚽ Match'  },
+        { key: 'lineup', label: '📋 Lineup' },
+      ].map(({ key, label }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === key
+              ? 'border-pitch-900 text-pitch-900'
+              : 'border-transparent text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function GameDetail() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const toast    = useToast();
   const { user } = useAuth();
+  const { seasons } = useSeason();
 
   const [game,     setGame]     = useState(null);
   const [players,  setPlayers]  = useState([]);
@@ -187,6 +213,8 @@ export default function GameDetail() {
   const [settingPotg,    setSettingPotg]    = useState(false);
   const [actioning,      setActioning]      = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [activeTab,      setActiveTab]      = useState('match');
+  const [lineupSaved,    setLineupSaved]    = useState(false);
 
   // Which goal panel is awaiting a goal log (home or away)
   const [pendingGoalSide, setPendingGoalSide] = useState(null); // 'home' | 'away'
@@ -203,6 +231,18 @@ export default function GameDetail() {
   [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Check if a lineup has been saved (for scheduled games only)
+  useEffect(() => {
+    if (!game) return;
+    if (game.status !== 'scheduled') { setLineupSaved(true); return; }
+    api.getGameLineup(id)
+      .then(lineup => setLineupSaved(lineup.length > 0))
+      .catch(() => setLineupSaved(false));
+  }, [game?.status, id]);
+
+  // Derived: current season object (with squad_size, preferred_rest_minutes, etc.)
+  const gameSeason = game?.season_id ? seasons.find(s => s.id === game.season_id) ?? null : null;
 
   useEffect(() => {
     if (!game) return;
@@ -388,12 +428,28 @@ export default function GameDetail() {
           )}
         </div>
 
-        <div className="p-6 flex flex-col items-center gap-4">
-          <p className="text-gray-400 text-sm">Game has not started yet</p>
-          <Btn variant="primary" size="lg" onClick={startGame} disabled={actioning}>
-            ▶ Start Game
-          </Btn>
-        </div>
+        <TabBar activeTab={activeTab} onChange={setActiveTab} />
+
+        {activeTab === 'lineup' ? (
+          <GameLineup
+            game={game}
+            timerSeconds={timerSeconds}
+            myTeamPlayers={myTeamPlayers}
+            season={gameSeason}
+            toast={toast}
+            onLineupSaved={() => setLineupSaved(true)}
+          />
+        ) : (
+          <div className="p-6 flex flex-col items-center gap-4">
+            <p className="text-gray-400 text-sm">Game has not started yet</p>
+            {!lineupSaved && (
+              <p className="text-xs text-amber-600 text-center">Set the lineup first in the Lineup tab</p>
+            )}
+            <Btn variant="primary" size="lg" onClick={startGame} disabled={actioning || !lineupSaved}>
+              ▶ Start Game
+            </Btn>
+          </div>
+        )}
       </div>
     );
   }
@@ -488,52 +544,66 @@ export default function GameDetail() {
           </div>
         </div>
 
-        {/* Goal panels — always home left, away right; My Team panel has player picker */}
-        <div className="grid grid-cols-2 divide-x divide-gray-200 border-b border-gray-200">
-          {[
-            { side: 'home', name: game.home_team_name, goals: homeGoals, isMyTeam: homeIsMyTeam },
-            { side: 'away', name: game.away_team_name, goals: awayGoals, isMyTeam: !homeIsMyTeam },
-          ].map(panel => (
-            <div key={panel.side} className="p-4">
-              <p className="font-bebas text-pitch-900 text-lg tracking-wide mb-2 truncate">{panel.name}</p>
-              <div className="divide-y divide-gray-100 mb-3">
-                {panel.goals.length === 0
-                  ? <p className="text-gray-300 text-xs py-2">No goals yet</p>
-                  : panel.goals.map(g => (
-                      <GoalRow key={g.id} goal={g} canDelete={canEdit} onDelete={removeGoal} />
-                    ))
-                }
-              </div>
-              {panel.isMyTeam ? (
-                <button
-                  onClick={() => handleGoalButtonClick(panel.side)}
-                  className="w-full bg-pitch-800 hover:bg-pitch-700 text-white text-xs font-bold py-2 rounded-lg transition-colors"
-                >
-                  + Goal
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleGoalButtonClick(panel.side)}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-pitch-700 text-xs font-bold py-2 rounded-lg transition-colors"
-                >
-                  + Goal
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
-        {/* POTG */}
-        <div className="p-4 md:p-6 max-w-2xl">
-          <PotgSection
+        {activeTab === 'lineup' ? (
+          <GameLineup
             game={game}
+            timerSeconds={timerSeconds}
             myTeamPlayers={myTeamPlayers}
-            potgPlayer={potgPlayer}
-            setPotgPlayer={setPotgPlayer}
-            settingPotg={settingPotg}
-            savePotg={savePotg}
+            season={gameSeason}
+            toast={toast}
           />
-        </div>
+        ) : (
+          <>
+            {/* Goal panels — always home left, away right; My Team panel has player picker */}
+            <div className="grid grid-cols-2 divide-x divide-gray-200 border-b border-gray-200">
+              {[
+                { side: 'home', name: game.home_team_name, goals: homeGoals, isMyTeam: homeIsMyTeam },
+                { side: 'away', name: game.away_team_name, goals: awayGoals, isMyTeam: !homeIsMyTeam },
+              ].map(panel => (
+                <div key={panel.side} className="p-4">
+                  <p className="font-bebas text-pitch-900 text-lg tracking-wide mb-2 truncate">{panel.name}</p>
+                  <div className="divide-y divide-gray-100 mb-3">
+                    {panel.goals.length === 0
+                      ? <p className="text-gray-300 text-xs py-2">No goals yet</p>
+                      : panel.goals.map(g => (
+                          <GoalRow key={g.id} goal={g} canDelete={canEdit} onDelete={removeGoal} />
+                        ))
+                    }
+                  </div>
+                  {panel.isMyTeam ? (
+                    <button
+                      onClick={() => handleGoalButtonClick(panel.side)}
+                      className="w-full bg-pitch-800 hover:bg-pitch-700 text-white text-xs font-bold py-2 rounded-lg transition-colors"
+                    >
+                      + Goal
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleGoalButtonClick(panel.side)}
+                      className="w-full bg-gray-100 hover:bg-gray-200 text-pitch-700 text-xs font-bold py-2 rounded-lg transition-colors"
+                    >
+                      + Goal
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* POTG */}
+            <div className="p-4 md:p-6 max-w-2xl">
+              <PotgSection
+                game={game}
+                myTeamPlayers={myTeamPlayers}
+                potgPlayer={potgPlayer}
+                setPotgPlayer={setPotgPlayer}
+                settingPotg={settingPotg}
+                savePotg={savePotg}
+              />
+            </div>
+          </>
+        )}
 
         {showPlayerPicker && (
           <PlayerPickerModal
@@ -581,27 +651,39 @@ export default function GameDetail() {
           </div>
         </div>
 
-        <div className="p-4 md:p-6 max-w-2xl space-y-6">
-          <Btn variant="primary" size="lg" className="w-full" onClick={handleRestart} disabled={actioning}>
-            ▶ Start Second Half
-          </Btn>
+        <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
-          {(homeGoals.length > 0 || awayGoals.length > 0) && (
-            <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                <h2 className="font-bebas text-pitch-900 text-xl tracking-wide">⚽ First Half Goals</h2>
-              </div>
-              <div className="divide-y divide-gray-100 px-4">
-                {[...homeGoals, ...awayGoals]
-                  .sort((a, b) => a.elapsed_seconds - b.elapsed_seconds)
-                  .map(g => (
-                    <GoalRow key={g.id} goal={g} canDelete={true} onDelete={removeGoal} />
-                  ))
-                }
-              </div>
-            </section>
-          )}
-        </div>
+        {activeTab === 'lineup' ? (
+          <GameLineup
+            game={game}
+            timerSeconds={timerSeconds}
+            myTeamPlayers={myTeamPlayers}
+            season={gameSeason}
+            toast={toast}
+          />
+        ) : (
+          <div className="p-4 md:p-6 max-w-2xl space-y-6">
+            <Btn variant="primary" size="lg" className="w-full" onClick={handleRestart} disabled={actioning}>
+              ▶ Start Second Half
+            </Btn>
+
+            {(homeGoals.length > 0 || awayGoals.length > 0) && (
+              <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <h2 className="font-bebas text-pitch-900 text-xl tracking-wide">⚽ First Half Goals</h2>
+                </div>
+                <div className="divide-y divide-gray-100 px-4">
+                  {[...homeGoals, ...awayGoals]
+                    .sort((a, b) => a.elapsed_seconds - b.elapsed_seconds)
+                    .map(g => (
+                      <GoalRow key={g.id} goal={g} canDelete={true} onDelete={removeGoal} />
+                    ))
+                  }
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -670,40 +752,52 @@ export default function GameDetail() {
         )}
       </div>
 
-      <div className="p-4 md:p-6 max-w-2xl space-y-6">
-        <div className="flex gap-3">
-          <Btn variant="secondary" onClick={() => setShowShareModal(true)}>📋 Share Result</Btn>
-          {user?.role === 'admin' && (
-            <Btn variant="ghost" onClick={handleReopen} disabled={actioning}>Reopen Game</Btn>
+      <TabBar activeTab={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'lineup' ? (
+        <GameLineup
+          game={game}
+          timerSeconds={timerSeconds}
+          myTeamPlayers={myTeamPlayers}
+          season={gameSeason}
+          toast={toast}
+        />
+      ) : (
+        <div className="p-4 md:p-6 max-w-2xl space-y-6">
+          <div className="flex gap-3">
+            <Btn variant="secondary" onClick={() => setShowShareModal(true)}>📋 Share Result</Btn>
+            {user?.role === 'admin' && (
+              <Btn variant="ghost" onClick={handleReopen} disabled={actioning}>Reopen Game</Btn>
+            )}
+          </div>
+
+          {(game.goals ?? []).length > 0 && (
+            <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                <h2 className="font-bebas text-pitch-900 text-xl tracking-wide">⚽ Goals</h2>
+              </div>
+              <div className="divide-y divide-gray-100 px-4">
+                {(game.goals ?? []).map(g => (
+                  <GoalRow key={g.id} goal={g} canDelete={false} onDelete={null} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <PotgSection
+            game={game}
+            myTeamPlayers={myTeamPlayers}
+            potgPlayer={potgPlayer}
+            setPotgPlayer={setPotgPlayer}
+            settingPotg={settingPotg}
+            savePotg={savePotg}
+          />
+
+          {game.created_by_name && (
+            <p className="text-[11px] text-gray-400 text-center">Added by {game.created_by_name}</p>
           )}
         </div>
-
-        {(game.goals ?? []).length > 0 && (
-          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="font-bebas text-pitch-900 text-xl tracking-wide">⚽ Goals</h2>
-            </div>
-            <div className="divide-y divide-gray-100 px-4">
-              {(game.goals ?? []).map(g => (
-                <GoalRow key={g.id} goal={g} canDelete={false} onDelete={null} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        <PotgSection
-          game={game}
-          myTeamPlayers={myTeamPlayers}
-          potgPlayer={potgPlayer}
-          setPotgPlayer={setPotgPlayer}
-          settingPotg={settingPotg}
-          savePotg={savePotg}
-        />
-
-        {game.created_by_name && (
-          <p className="text-[11px] text-gray-400 text-center">Added by {game.created_by_name}</p>
-        )}
-      </div>
+      )}
 
       {showShareModal && (
         <ShareModal gameId={id} onClose={() => setShowShareModal(false)} />

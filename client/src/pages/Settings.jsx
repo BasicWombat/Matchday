@@ -36,10 +36,13 @@ export default function Settings() {
   const [tab, setTab] = useState('teams');
 
   // Seasons
-  const [seasonEditingId,   setSeasonEditingId]   = useState(null);
-  const [seasonEditName,    setSeasonEditName]     = useState('');
-  const [seasonEditYear,    setSeasonEditYear]     = useState('');
-  const [seasonEditSaving,  setSeasonEditSaving]   = useState(false);
+  const [seasonEditingId,      setSeasonEditingId]      = useState(null);
+  const [seasonEditName,       setSeasonEditName]        = useState('');
+  const [seasonEditYear,       setSeasonEditYear]        = useState('');
+  const [seasonEditSquadSize,  setSeasonEditSquadSize]   = useState('');
+  const [seasonEditPrefRest,   setSeasonEditPrefRest]    = useState('');
+  const [seasonEditMaxRest,    setSeasonEditMaxRest]     = useState('');
+  const [seasonEditSaving,     setSeasonEditSaving]      = useState(false);
   const [newSeason,         setNewSeason]          = useState({ name: '', year: '' });
   const [addingSeason,      setAddingSeason]       = useState(false);
   const [justCreated,       setJustCreated]        = useState(null);
@@ -188,6 +191,9 @@ export default function Settings() {
     setSeasonEditingId(s.id);
     setSeasonEditName(s.name);
     setSeasonEditYear(s.year ? String(s.year) : '');
+    setSeasonEditSquadSize(s.squad_size ? String(s.squad_size) : '');
+    setSeasonEditPrefRest(s.preferred_rest_minutes ? String(s.preferred_rest_minutes) : '');
+    setSeasonEditMaxRest(s.max_rest_minutes ? String(s.max_rest_minutes) : '');
   }
   function cancelSeasonEdit() { setSeasonEditingId(null); }
 
@@ -195,7 +201,13 @@ export default function Settings() {
     if (!seasonEditName.trim()) return;
     setSeasonEditSaving(true);
     try {
-      await api.updateSeason(id, { name: seasonEditName.trim(), year: seasonEditYear || null });
+      await api.updateSeason(id, {
+        name:                   seasonEditName.trim(),
+        year:                   seasonEditYear || null,
+        squad_size:             seasonEditSquadSize || null,
+        preferred_rest_minutes: seasonEditPrefRest  || null,
+        max_rest_minutes:       seasonEditMaxRest   || null,
+      });
       await refreshSeasons();
       setSeasonEditingId(null);
       toast('Season updated!');
@@ -623,6 +635,44 @@ export default function Settings() {
                               className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
                             />
                           </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Players on Field</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={seasonEditSquadSize}
+                                onChange={e => setSeasonEditSquadSize(e.target.value)}
+                                placeholder="e.g. 8"
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                              />
+                              <p className="text-[10px] text-gray-400 mt-0.5">Include the goalie</p>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Preferred Rest (min)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={seasonEditPrefRest}
+                                onChange={e => setSeasonEditPrefRest(e.target.value)}
+                                placeholder="e.g. 5"
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                              />
+                              <p className="text-[10px] text-gray-400 mt-0.5">Ready to rotate on</p>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-widest text-pitch-600 mb-1">Max Rest (min)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={seasonEditMaxRest}
+                                onChange={e => setSeasonEditMaxRest(e.target.value)}
+                                placeholder="e.g. 8"
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-pitch-400 bg-white"
+                              />
+                              <p className="text-[10px] text-gray-400 mt-0.5">Flagged as overdue</p>
+                            </div>
+                          </div>
                           <div className="flex gap-2">
                             <Btn size="sm" variant="primary" onClick={() => saveSeasonEdit(s.id)} disabled={seasonEditSaving || !seasonEditName.trim()}>
                               {seasonEditSaving ? '…' : 'Save'}
@@ -643,6 +693,7 @@ export default function Settings() {
                             </div>
                             <p className="text-xs text-gray-400">
                               {s.year ? `${s.year} · ` : ''}{s.game_count} game{s.game_count !== 1 ? 's' : ''}
+                              {s.squad_size ? ` · ${s.squad_size}v${s.squad_size}` : ''}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
